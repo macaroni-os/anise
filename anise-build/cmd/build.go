@@ -179,18 +179,28 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 					Warning(":head_bandage: No packages selected for build!")
 				} else {
 					if pretend {
-						InfoC(fmt.Sprintf(":construction: %s", Bold("Candidates for the build!")))
+						InfoC(fmt.Sprintf(":construction: %s", Bold("Candidates for the build:")))
 					} else {
 						InfoC(fmt.Sprintf(":construction: %s", Bold("Packages built:")))
 					}
+					var msg string
 					for i := range candidates.Artifacts {
 
-						msg := fmt.Sprintf(
-							"[%3d of %3d] %-65s - %-15s",
-							aurora.Bold(aurora.BrightMagenta(i+1)),
-							aurora.Bold(aurora.BrightMagenta(tot)),
-							Bold(candidates.Artifacts[i].GetPackage().PackageName()),
-							Bold(candidates.Artifacts[i].GetPackage().GetVersion()))
+						if candidates.Artifacts[i].IsToGenerate() || !onlyTarget {
+							msg = fmt.Sprintf(
+								"[%3d of %3d] %-65s - %-15s",
+								aurora.Bold(aurora.BrightMagenta(i+1)),
+								aurora.Bold(aurora.BrightMagenta(tot)),
+								Bold(candidates.Artifacts[i].GetPackage().PackageName()),
+								Bold(candidates.Artifacts[i].GetPackage().GetVersion()))
+						} else {
+							msg = fmt.Sprintf(
+								"[%3d of %3d] %-65s - %-15s",
+								aurora.BrightMagenta(i+1),
+								aurora.BrightMagenta(tot),
+								candidates.Artifacts[i].GetPackage().PackageName(),
+								candidates.Artifacts[i].GetPackage().GetVersion())
+						}
 						if pretend {
 							Info(fmt.Sprintf(":package:%s", msg))
 						} else {

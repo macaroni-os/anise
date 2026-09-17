@@ -6,17 +6,17 @@ package solver
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/macaroni-os/anise/anise-build/pkg/v2/backend"
 	cfg "github.com/macaroni-os/anise/pkg/config"
 	fhelpers "github.com/macaroni-os/anise/pkg/helpers/file"
+	. "github.com/macaroni-os/anise/pkg/logger"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/options"
 	"github.com/macaroni-os/anise/pkg/v2/render"
 	"github.com/macaroni-os/anise/pkg/v2/tree"
 
-	"golang.org/x/exp/maps"
+	. "github.com/logrusorgru/aurora"
 )
 
 type BuildManager struct {
@@ -51,6 +51,7 @@ func (bm *BuildManager) PrepareSolver(stype string,
 		return fmt.Errorf("error on read tree indexes: %s", err.Error())
 	}
 
+	// Setup the forest guard for the solver
 	bm.Solver.SetForestGuard(forestGuard)
 
 	// Creating render engine for build
@@ -92,12 +93,11 @@ func (bm *BuildManager) BuildPretend(selectors []string) (*artifact.ArtifactsPac
 			_, missed := apMap.MatchVersion(part)
 			if missed != nil {
 				apMap.Add(part)
+				ans.Add(part)
 			} // else package is alreade present.
 		}
 
 	}
-
-	ans.Artifacts = *apMap.ToList()
 
 	return ans, nil
 }
@@ -109,7 +109,7 @@ func (bm *BuildManager) Build(
 
 	ans := artifact.NewArtifactsPack()
 	tasksMap := make(map[string]*PackageTask, 0)
-	artResMap := make(map[string]*artifact.ArtifactsPack, 0)
+	tasksKeys := []string{}
 
 	// We need / at the end to have EnsureDir works correctly.
 	if destination[len(destination)-1:] != "/" {
@@ -127,12 +127,19 @@ func (bm *BuildManager) Build(
 			return ans, err
 		}
 
+		InfoC(Bold(fmt.Sprintf(":eyes: Resolving selector...               %s",
+			pkgSelector.HumanReadableString())))
+
 		// Retrieve all the matched versions
 		indexes, err := bm.Solver.GetForestGuard().SearchPackage(
 			pkgSelector,
 		)
 		if err != nil {
 			return ans, err
+		}
+		if len(indexes) == 0 {
+			return ans, fmt.Errorf("No candidates for selector %s found.",
+				pkgSelector.HumanReadableString())
 		}
 
 		vMap := make(map[string]bool, 0)
@@ -158,8 +165,10 @@ func (bm *BuildManager) Build(
 				}
 				vMap[tv.Version] = true
 
+				DebugC(fmt.Sprintf(":construction: Creating package task for %s-%s",
+					pkgSelector.PackageName(), tv.Version))
 				ptask := NewPackageTask(ti, tv, pkgSelector)
-				solution, err := bm.Solver.ResolvePackageTask(ptask)
+				_, err := bm.Solver.ResolvePackageTask(ptask)
 				if err != nil {
 					return ans, err
 				}
@@ -169,7 +178,7 @@ func (bm *BuildManager) Build(
 				)
 
 				tasksMap[key] = ptask
-				artResMap[key] = solution
+				tasksKeys = append(tasksKeys, key)
 
 			}
 
@@ -183,20 +192,13 @@ func (bm *BuildManager) Build(
 		return ans, err
 	}
 
-	// Retrieve the list of the keys of the map and sort
-	// the packages string to follow a predictable order.
-	pkgsKeys := maps.Keys(tasksMap)
-	// Using alphabetic order ascending of the packages string
-	sort.Strings(pkgsKeys)
-
 	elaboratedPkgsMap := artifact.NewArtifactsMap()
 
-	for _, pkgstr := range pkgsKeys {
+	for _, pkgstr := range tasksKeys {
 
 		ptask, _ := tasksMap[pkgstr]
-		art2build, _ := artResMap[pkgstr]
 
-		err = bm.buildPackageTask(ptask, art2build,
+		err = bm.buildPackageTask(ptask, ptask.Solution,
 			elaboratedPkgsMap, opts,
 			destination,
 		)

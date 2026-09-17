@@ -46,6 +46,14 @@ func (ap *ArtifactsPack) ToMap() *ArtifactsMap {
 	return ans
 }
 
+func (ap *ArtifactsPack) AppendPack(p *ArtifactsPack) {
+	if p != nil {
+		for idx := range p.Artifacts {
+			ap.Add(p.Artifacts[idx])
+		}
+	}
+}
+
 func (ap *ArtifactsPack) YAML() ([]byte, error) {
 	return yaml.Marshal(ap)
 }
@@ -65,6 +73,16 @@ func (ap *ArtifactsPack) IsPresent(p *PackageArtifact) bool {
 		}
 	}
 	return false
+}
+
+func (am *ArtifactsMap) GetKeys() []string {
+	ans := []string{}
+	if len(am.Artifacts) > 0 {
+		for k := range am.Artifacts {
+			ans = append(ans, k)
+		}
+	}
+	return ans
 }
 
 func (am *ArtifactsMap) MatchVersion(p *PackageArtifact) (*PackageArtifact, error) {

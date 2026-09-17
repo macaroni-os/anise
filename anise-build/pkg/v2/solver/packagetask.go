@@ -21,6 +21,8 @@ type PackageTask struct {
 
 	availablesDepsMap *artifact.ArtifactsMap
 	candidatesDepsMap *artifact.ArtifactsMap
+
+	Solution *artifact.ArtifactsPack
 }
 
 type DependencySelector struct {

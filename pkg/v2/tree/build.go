@@ -66,11 +66,6 @@ func ReadBuildFile(buildFile, definitionFile string,
 	// NOTE: merging runtime requires, provides, conflicts only
 	//       if the compiler specs are related to a virtual package
 	if loadSpec.IsVirtual() {
-		// If the requires aren't available we will use the runtime deps
-		if len(loadSpec.GetRequires()) == 0 && len(defPkg.GetRequires()) != 0 {
-			ans.Requires(defPkg.GetRequires())
-		}
-
 		if len(loadSpec.GetConflicts()) == 0 && len(defPkg.GetConflicts()) != 0 {
 			ans.Conflicts(defPkg.GetConflicts())
 		}
@@ -137,14 +132,9 @@ func ReadBuildFileFromCollection(buildFile, cFile string,
 
 	ans := loadSpec
 
-	// NOTE: merging runtime requires, provides, conflicts only
+	// NOTE: merging runtime provides, conflicts only
 	//       if the compiler specs are related to a virtual package
 	if loadSpec.IsVirtual() {
-		// If the requires aren't available we will use the runtime deps
-		if len(loadSpec.GetRequires()) == 0 && len(defPkg.GetRequires()) != 0 {
-			ans.Requires(defPkg.GetRequires())
-		}
-
 		if len(loadSpec.GetConflicts()) == 0 && len(defPkg.GetConflicts()) != 0 {
 			ans.Conflicts(defPkg.GetConflicts())
 		}

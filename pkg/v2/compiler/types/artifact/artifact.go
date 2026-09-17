@@ -59,12 +59,15 @@ type PackageArtifact struct {
 
 	BuildImageHash string `json:"hash_buildimage,omitempty" yaml:"hash_buildimage,omitempty"`
 	FinalImageHash string `json:"hash_finalimage,omitempty" yaml:"hash_finalimage,omitempty"`
+
+	ToGenerate bool `json:"-" yaml:"-"`
 }
 
 func (p *PackageArtifact) SetBuildImageHash(h string) { p.BuildImageHash = h }
 func (p *PackageArtifact) GetBuildImageHash() string  { return p.BuildImageHash }
 func (p *PackageArtifact) SetFinalImageHash(h string) { p.FinalImageHash = h }
 func (p *PackageArtifact) GetFinalImageHash() string  { return p.FinalImageHash }
+func (p *PackageArtifact) IsToGenerate() bool         { return p.ToGenerate }
 
 func (p *PackageArtifact) ShallowCopy() *PackageArtifact {
 	copy := *p
