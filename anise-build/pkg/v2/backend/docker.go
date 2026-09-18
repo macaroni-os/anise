@@ -129,6 +129,7 @@ func (d *Dockerv3) generateFinalImageHash(art *artifact.PackageArtifact,
 }
 
 func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
+	solution *artifact.ArtifactsPack,
 	opts *options.Compiler, dockerFile string) error {
 
 	dockerSteps := ""
@@ -140,7 +141,43 @@ func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
 		dockerSteps = fmt.Sprintf("FROM %s", art.CompileSpec.Image)
 
 	} else {
-		return fmt.Errorf("Not yet implemented")
+
+		// NOTE: I consider that all dependencies are elaborated
+		//       before this package. This means that all artefacts
+		//       are already with the BuilderImageHash and
+		//       FinalImageHash attributes valorized.
+
+		if len(art.GetPackage().GetRequires()) > 0 {
+
+			solutionMap := solution.ToMap()
+
+			for idx, art := range art.GetPackage().GetRequires() {
+
+				// Retrieve artefact from solution to retrieves
+				// all hashes.
+				deps, err := solutionMap.GetArtifactsByKey(art.PackageName())
+				if err != nil {
+					return err
+				}
+
+				if idx == 0 {
+					dockerSteps += fmt.Sprintf("FROM %s:%s",
+						opts.PushImageRepository,
+						deps[0].GetFinalImageHash())
+				} else {
+					dockerSteps += "\n" +
+						fmt.Sprintf("COPY --from=%s:%s / /",
+							opts.PushImageRepository,
+							deps[0].GetFinalImageHash())
+				}
+			}
+
+		} else {
+
+			dockerSteps = "FROM scratch"
+
+		}
+
 	}
 
 	dockerSteps += "\n" +
@@ -248,7 +285,7 @@ func (d *Dockerv3) CreateBuildImage(art *artifact.PackageArtifact,
 	Debug(fmt.Sprintf("Creating file %s", dockerFile))
 
 	// Prepare dockerfile for build image
-	err = d.createBuildDockerfile(art, opts, dockerFile)
+	err = d.createBuildDockerfile(art, solution, opts, dockerFile)
 	if err != nil {
 		return err
 	}
@@ -304,7 +341,7 @@ func (d *Dockerv3) BuildImage(art *artifact.PackageArtifact,
 		return err
 	}
 
-	Info(":whale: Building image " + imagename + " done")
+	Info(":whale: Building image " + imagename + " :check_mark:")
 
 	return nil
 }
@@ -396,7 +433,7 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		art.FinalImageHash)
 
 	InfoC(fmt.Sprintf(
-		":factory: Building image %s", remotetaggedImage))
+		":factory: Prepare generation of final image %s", remotetaggedImage))
 
 	// Build staging directory
 	buildPkgdir := filepath.Join(builddir,
@@ -456,7 +493,7 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 
 	if art.CompileSpec.PackageDir == "" {
 		// TODO
-		return fmt.Errorf("Not yet implemented")
+		return fmt.Errorf("Empty package dir not yet implemented")
 	}
 
 	if !strings.HasSuffix(extractdir, "/") {

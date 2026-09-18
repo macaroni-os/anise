@@ -215,17 +215,15 @@ func (bm *BuildManager) Build(
 }
 
 func (bm *BuildManager) buildPackageTask(
-	ptask *PackageTask, pack *artifact.ArtifactsPack,
+	ptask *PackageTask,
+	solution *artifact.ArtifactsPack,
 	elaboratedPkgsMap *artifact.ArtifactsMap,
 	opts *options.Compiler, dst string) error {
 
 	// Create the backend bridge
 	bridge := backend.NewBackendBridge(bm.Config, opts)
 
-	// Number of artefacts
-	// numPkgs := len(pack.Artifacts)
-
-	for _, p := range pack.Artifacts {
+	for _, p := range solution.Artifacts {
 		elabp, _ := elaboratedPkgsMap.MatchVersion(p)
 		if elabp != nil {
 			// POST: package already elaborated. Skipping.
@@ -240,7 +238,7 @@ func (bm *BuildManager) buildPackageTask(
 			}
 		}
 
-		err := bridge.BuildArtifact(dst, p, pack, generatePackage)
+		err := bridge.BuildArtifact(dst, p, solution, generatePackage)
 		if err != nil {
 			return err
 		}
