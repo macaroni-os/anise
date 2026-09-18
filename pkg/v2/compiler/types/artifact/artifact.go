@@ -56,11 +56,19 @@ type PackageArtifact struct {
 	Files             []string                      `json:"files" yaml:"files"`
 	PackageCacheImage string                        `json:"package_cacheimage,omitempty" yaml:"package_cacheimage,omitempty"`
 	Runtime           *pkg.DefaultPackage           `json:"runtime,omitempty" yaml:"runtime,omitempty"`
+	Copy              []*CopyField                  `json:"copy,omitempty" yaml:"copy,omitempty"`
 
 	BuildImageHash string `json:"hash_buildimage,omitempty" yaml:"hash_buildimage,omitempty"`
 	FinalImageHash string `json:"hash_finalimage,omitempty" yaml:"hash_finalimage,omitempty"`
 
 	ToGenerate bool `json:"-" yaml:"-"`
+}
+
+type CopyField struct {
+	Package     *pkg.DefaultPackage `json:"package,omitempty" yaml:"package,omitempty"`
+	Image       string              `json:"image,omitempty" yaml:"image,omitempty"`
+	Source      string              `json:"source" yaml:"source"`
+	Destination string              `json:"destination" yaml:"destination"`
 }
 
 func (p *PackageArtifact) SetBuildImageHash(h string) { p.BuildImageHash = h }
@@ -126,6 +134,53 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 			}
 
 			pthin.Requires = append(pthin.Requires, depthin)
+		}
+
+	}
+
+	if len(p.Copy) > 0 && withDeps {
+		for _, c := range p.Copy {
+			if c.Package == nil {
+				// Just consider a dependency copyfield with package.
+				continue
+			}
+
+			dep := c.Package
+
+			version := dep.GetVersion()
+			if version == "" {
+				version = ">=0"
+			}
+
+			depthin := pkg.NewPackageThin(
+				dep.GetName(), dep.GetCategory(), version,
+				[]*pkg.PackageThin{}, []*pkg.PackageThin{},
+			)
+
+			if solution != nil {
+				if solution.HasKey(dep.PackageName()) {
+					artefacts, _ := solution.GetArtifactsByKey(dep.PackageName())
+					depthin.Version = artefacts[0].GetPackage().GetVersion()
+
+				} else {
+					// Check if the package is provided
+					provides := solution.GetProvides(dep.PackageName())
+					if len(provides) == 0 {
+						return nil, fmt.Errorf("No package for %s found on solution.",
+							dep.PackageName())
+					}
+
+					depthin = pkg.NewPackageThin(
+						provides[0].GetPackage().GetName(),
+						provides[0].GetPackage().GetCategory(),
+						provides[0].GetPackage().GetVersion(),
+						[]*pkg.PackageThin{}, []*pkg.PackageThin{},
+					)
+				}
+			}
+
+			pthin.Requires = append(pthin.Requires, depthin)
+
 		}
 
 	}

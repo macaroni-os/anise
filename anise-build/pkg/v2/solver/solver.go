@@ -225,6 +225,11 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 	if cs.DefaultPackage != nil && len(cs.DefaultPackage.GetRequires()) > 0 {
 
 		for _, dep := range cs.DefaultPackage.GetRequires() {
+
+			if dep.GetVersion() == "" {
+				dep.Version = ">=0"
+			}
+
 			DebugC(fmt.Sprintf(":satellite: [%s] Processing dependency selector %s ...",
 				cs.DefaultPackage.HumanReadableString(), dep.HumanReadableString()))
 
@@ -241,6 +246,56 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 			reqIdx = *tree.FragmentTrees(&reqIdx, dep.PackageName(), true)
 
 			ptask.AddDependency(NewDependencySelectorWithIdx(dep, &reqIdx))
+
+			// Iterate for every version available of the analyzed dependencies. I will
+			// add informations in the availablesDepsMap of the package task.
+			// This phase wants retrieve and load the packages metadata of all
+			// dependencies and versions available. The identification of the
+			// build order of these dependencies is done later.
+
+			for _, tidx := range reqIdx {
+
+				// NOTE: Every TreeIdx contains only one version
+				versions, _ := tidx.GetPackageVersions(dep.PackageName())
+
+				deps, err := s.recursiveLoadDep(ptask, tidx, versions[0], dep, stack)
+				if err != nil {
+					return ans, err
+				}
+
+				for idx := range deps.Artifacts {
+					ptask.availablesDepsMap.Add(deps.Artifacts[idx])
+				}
+			}
+
+		}
+
+	}
+
+	if cs.Copy != nil && len(cs.Copy) > 0 {
+
+		for _, c := range cs.Copy {
+
+			dep := c.Package
+
+			if dep.GetVersion() == "" {
+				dep.Version = ">=0"
+			}
+
+			DebugC(fmt.Sprintf(":satellite: [%s] Processing copy dependency selector %s ...",
+				cs.DefaultPackage.HumanReadableString(), dep.HumanReadableString()))
+
+			// Retrieve all available packages of the selected dependency
+			// The packages not admitted by the selector are dropped from
+			// the list.
+			reqIdx, err := s.ForestGuard.SearchPackage(dep)
+			if err != nil {
+				return ans, err
+			}
+
+			// Fragments and sort all availables version. (it drops duplicates too).
+			// Sort in reverse order (newest before old).
+			reqIdx = *tree.FragmentTrees(&reqIdx, dep.PackageName(), true)
 
 			// Iterate for every version available of the analyzed dependencies. I will
 			// add informations in the availablesDepsMap of the package task.
