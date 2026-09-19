@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2021-2022  Daniele Rondina <geaaru@funtoo.org>
+Copyright © 2021-2026 Daniele Rondina <geaaru@macaronios.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -65,6 +65,7 @@ type SpecFile struct {
 
 	// Validate extract when the file is been closed.
 	Validate bool `yaml:"validate,omitempty" json:"validate,omitempty"`
+	Summary  bool `yaml:"summary,omitempty" json:"summary,omitempty"`
 
 	// Writer specific section
 	Writer *WriterRules `yaml:"writer,omitempty" json:"writer,omitempty"`
@@ -103,4 +104,22 @@ type Link struct {
 	TypeFlag byte
 	Mode     os.FileMode
 	Meta     FileMeta
+}
+
+type TaskSummary struct {
+	Files []*FileIdentity `yaml:"files,omitempty" json:"files,omitempty"`
+}
+
+type FileIdentity struct {
+	Type byte   `yaml:"type" json:"type"`
+	Name string `yaml:"name" json:"name"`
+	Size int64  `yaml:"size,omitempty" json:"size,omitempty"`
+
+	Checksum *FileChecksum `yaml:"checksum,omitempty" json:"checksum,omitempty"`
+}
+
+type FileChecksum struct {
+	Sha512  string `yaml:"sha512,omitempty" json:"sha512,omitempty"`
+	Md5     string `yaml:"md5,omitempty" json:"md5,omitempty"`
+	Blake2b string `yaml:"blake2b,omitempty" json:"blake2b,omitempty"`
 }

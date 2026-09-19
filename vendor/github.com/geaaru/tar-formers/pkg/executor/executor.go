@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2021-2023  Daniele Rondina <geaaru@gmail.org>
+Copyright © 2021-2026 Daniele Rondina <geaaru@macaronios.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@ import (
 
 	log "github.com/geaaru/tar-formers/pkg/logger"
 	specs "github.com/geaaru/tar-formers/pkg/specs"
+	"github.com/geaaru/tar-formers/pkg/tools"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -76,6 +77,9 @@ type TarFormers struct {
 
 	flushMutex sync.Mutex
 	FlushErrs  []error
+
+	// Task Metadata of the elaborated files
+	summary *specs.TaskSummary `yaml:"task_summary,omitempty" json:"task_summary,omitempty"`
 }
 
 func SetDefaultTarFormers(t *TarFormers) {
@@ -111,6 +115,8 @@ func NewTarFormersWithLog(config *specs.Config, defLog bool) *TarFormers {
 	}
 	return ans
 }
+
+func (t *TarFormers) GetSummary() *specs.TaskSummary { return t.summary }
 
 func (t *TarFormers) SetReader(reader io.Reader) {
 	t.reader = reader
@@ -157,6 +163,10 @@ func (t *TarFormers) RunTaskWriter(task *specs.SpecFile) error {
 	t.TaskWriter = task
 	t.TaskWriter.Prepare()
 
+	if t.Task.Summary {
+		t.summary = specs.NewTaskSummary()
+	}
+
 	tarWriter := tar.NewWriter(t.writer)
 	defer tarWriter.Close()
 
@@ -182,6 +192,10 @@ func (t *TarFormers) RunTaskBridge(in, out *specs.SpecFile) error {
 
 	t.Task.Prepare()
 	t.TaskWriter.Prepare()
+
+	if t.Task.Summary {
+		t.summary = specs.NewTaskSummary()
+	}
 
 	tarWriter := tar.NewWriter(t.writer)
 	defer tarWriter.Close()
@@ -299,9 +313,22 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 				name, err.Error())
 		}
 
+		fIdentity := specs.NewFileIdentity(header.Typeflag, name)
+		fIdentity.Size = header.Size
+
 		switch header.Typeflag {
 		case tar.TypeReg, tar.TypeRegA:
-			nb, err := io.Copy(tarWriter, tarReader)
+
+			var writer io.Writer = tarWriter
+			hashes := tools.NewFileHashesWriter()
+			if t.Task.Summary {
+				writer = io.MultiWriter(
+					tarWriter,
+					hashes,
+				)
+			}
+
+			nb, err := io.Copy(writer, tarReader)
 			if err != nil {
 				return fmt.Errorf(
 					"Error on write file %s: %s", name, err.Error())
@@ -311,8 +338,19 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 					"For file %s written %s instead of %s bytes.",
 					nb, header.Size)
 			}
+
+			if t.Task.Summary {
+				fIdentity.Checksum = &specs.FileChecksum{
+					Sha512:  hashes.Sha512(),
+					Md5:     hashes.MD5(),
+					Blake2b: hashes.Blake2b(),
+				}
+			}
 		}
 
+		if t.Task.Summary {
+			t.summary.AddFile(fIdentity)
+		}
 	}
 
 	tarWriter.Flush()
@@ -366,6 +404,10 @@ func (t *TarFormers) RunTask(task *specs.SpecFile, dir string) error {
 	}
 
 	t.Task = task
+
+	if t.Task.Summary {
+		t.summary = specs.NewTaskSummary()
+	}
 
 	_, err := t.CreateDir(dir, 0755)
 	if err != nil {
@@ -486,6 +528,9 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 				header.Gid, info.Mode(), header.Linkname))
 		}
 
+		fIdentity := specs.NewFileIdentity(header.Typeflag, name)
+		fIdentity.Size = header.Size
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			newDir, err = t.CreateDir(targetPath, info.Mode())
@@ -494,7 +539,8 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 					targetPath, err.Error())
 			}
 		case tar.TypeReg, tar.TypeRegA:
-			err = t.CreateFile(dir, name, info.Mode(), tarReader, header)
+			fIdentity.Checksum, err = t.CreateFile(
+				dir, name, info.Mode(), tarReader, header)
 			if err != nil {
 				return err
 			}
@@ -540,6 +586,10 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 					return err
 				}
 			}
+		}
+
+		if t.Task.Summary {
+			t.summary.AddFile(fIdentity)
 		}
 
 	}

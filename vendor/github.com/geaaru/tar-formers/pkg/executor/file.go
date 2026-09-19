@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2021-2023  Daniele Rondina <geaaru@gmail.org>
+Copyright © 2021-2026 Daniele Rondina <geaaru@macaronios.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -26,23 +26,24 @@ import (
 	"syscall"
 
 	specs "github.com/geaaru/tar-formers/pkg/specs"
+	"github.com/geaaru/tar-formers/pkg/tools"
 
 	"golang.org/x/sys/unix"
 )
 
-func (t *TarFormers) CreateFile(dir, name string, mode os.FileMode, reader io.Reader, header *tar.Header) error {
+func (t *TarFormers) CreateFile(dir, name string, mode os.FileMode, reader io.Reader, header *tar.Header) (*specs.FileChecksum, error) {
 	file := filepath.Join(dir, name)
 
 	_, err := t.CreateDir(filepath.Dir(file), mode|os.ModeDir|100)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// To avoid the Text file busy error.
 	// It's needed unlink the file if exists.
 	exists, err := t.ExistFile(file)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if exists {
@@ -55,26 +56,36 @@ func (t *TarFormers) CreateFile(dir, name string, mode os.FileMode, reader io.Re
 
 	err = t.semaphore.Acquire(*t.Ctx, 1)
 	if err != nil {
-		return errors.New("Error on acquire sem on processing file " + file)
+		return nil, errors.New("Error on acquire sem on processing file " + file)
 	}
 
 	f, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 	if err != nil {
-		return errors.New(
+		return nil, errors.New(
 			fmt.Sprintf("Error on open file %s: %s", file, err.Error()))
 	}
 
 	// Copy file content
 	copyBuffer := make([]byte, t.Task.BufferSize*1024)
-	nb, err := io.CopyBuffer(f, reader, copyBuffer)
+
+	var writer io.Writer = f
+	hashes := tools.NewFileHashesWriter()
+	if t.Task.Summary {
+		writer = io.MultiWriter(
+			f,
+			hashes,
+		)
+	}
+
+	nb, err := io.CopyBuffer(writer, reader, copyBuffer)
 	if err != nil {
 		f.Close()
-		return fmt.Errorf("Error on write file %s: %s",
+		return nil, fmt.Errorf("Error on write file %s: %s",
 			file, err.Error())
 	}
 	if nb != header.Size {
 		f.Close()
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"For file %s written file are different %d - %d",
 			file, nb, header.Size)
 	}
@@ -118,7 +129,17 @@ func (t *TarFormers) CreateFile(dir, name string, mode os.FileMode, reader io.Re
 
 	}()
 
-	return nil
+	if t.Task.Summary {
+		checksum := &specs.FileChecksum{
+			Sha512:  hashes.Sha512(),
+			Md5:     hashes.MD5(),
+			Blake2b: hashes.Blake2b(),
+		}
+
+		return checksum, nil
+	}
+
+	return nil, nil
 }
 
 func (t *TarFormers) ExistFile(path string) (bool, error) {
