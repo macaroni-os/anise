@@ -48,34 +48,30 @@ import (
 type PackageArtifact struct {
 	Path      string `json:"path" yaml:"path"`
 	CachePath string `json:"cache_path,omitempty" yaml:"cache_path,omitempty"`
+	TreePath  string `json:"tree_path,omitempty" yaml:"tree_path,omitempty"`
 
-	Dependencies      []*PackageArtifact            `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
-	CompileSpec       *compilerspec.CompilationSpec `json:"compilespec,omitempty" yaml:"compilespec,omitempty"`
-	Checksums         Checksums                     `json:"checksums" yaml:"checksums"`
-	CompressionType   compression.Implementation    `json:"compressiontype" yaml:"compressiontype"`
-	Files             []string                      `json:"files" yaml:"files"`
-	PackageCacheImage string                        `json:"package_cacheimage,omitempty" yaml:"package_cacheimage,omitempty"`
-	Runtime           *pkg.DefaultPackage           `json:"runtime,omitempty" yaml:"runtime,omitempty"`
-	Copy              []*CopyField                  `json:"copy,omitempty" yaml:"copy,omitempty"`
+	Dependencies    []*PackageArtifact            `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
+	CompileSpec     *compilerspec.CompilationSpec `json:"compilespec,omitempty" yaml:"compilespec,omitempty"`
+	Checksums       Checksums                     `json:"checksums" yaml:"checksums"`
+	CompressionType compression.Implementation    `json:"compressiontype" yaml:"compressiontype"`
+	Files           []string                      `json:"files" yaml:"files"`
+
+	PackageCacheImage string              `json:"package_cacheimage,omitempty" yaml:"package_cacheimage,omitempty"`
+	Runtime           *pkg.DefaultPackage `json:"runtime,omitempty" yaml:"runtime,omitempty"`
 
 	BuildImageHash string `json:"hash_buildimage,omitempty" yaml:"hash_buildimage,omitempty"`
 	FinalImageHash string `json:"hash_finalimage,omitempty" yaml:"hash_finalimage,omitempty"`
 
-	ToGenerate bool `json:"-" yaml:"-"`
+	ToGenerate bool           `json:"-" yaml:"-"`
+	Metadata   *ExtraMetadata `json:"-" yaml:"-"`
 }
 
-type CopyField struct {
-	Package     *pkg.DefaultPackage `json:"package,omitempty" yaml:"package,omitempty"`
-	Image       string              `json:"image,omitempty" yaml:"image,omitempty"`
-	Source      string              `json:"source" yaml:"source"`
-	Destination string              `json:"destination" yaml:"destination"`
-}
-
-func (p *PackageArtifact) SetBuildImageHash(h string) { p.BuildImageHash = h }
-func (p *PackageArtifact) GetBuildImageHash() string  { return p.BuildImageHash }
-func (p *PackageArtifact) SetFinalImageHash(h string) { p.FinalImageHash = h }
-func (p *PackageArtifact) GetFinalImageHash() string  { return p.FinalImageHash }
-func (p *PackageArtifact) IsToGenerate() bool         { return p.ToGenerate }
+func (p *PackageArtifact) SetBuildImageHash(h string)       { p.BuildImageHash = h }
+func (p *PackageArtifact) GetBuildImageHash() string        { return p.BuildImageHash }
+func (p *PackageArtifact) SetFinalImageHash(h string)       { p.FinalImageHash = h }
+func (p *PackageArtifact) GetFinalImageHash() string        { return p.FinalImageHash }
+func (p *PackageArtifact) IsToGenerate() bool               { return p.ToGenerate }
+func (p *PackageArtifact) GetExtraMetadata() *ExtraMetadata { return p.Metadata }
 
 func (p *PackageArtifact) ShallowCopy() *PackageArtifact {
 	copy := *p
@@ -138,8 +134,8 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 
 	}
 
-	if len(p.Copy) > 0 && withDeps {
-		for _, c := range p.Copy {
+	if len(p.CompileSpec.Copy) > 0 && withDeps {
+		for _, c := range p.CompileSpec.Copy {
 			if c.Package == nil {
 				// Just consider a dependency copyfield with package.
 				continue
@@ -189,7 +185,7 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 }
 
 func NewPackageArtifact(path string) *PackageArtifact {
-	return &PackageArtifact{Path: path, Dependencies: []*PackageArtifact{}, Checksums: Checksums{}, CompressionType: compression.None}
+	return &PackageArtifact{Path: path, TreePath: path, Dependencies: []*PackageArtifact{}, Checksums: Checksums{}, CompressionType: compression.None}
 }
 
 func NewPackageArtifactFromYaml(data []byte) (*PackageArtifact, error) {
@@ -290,6 +286,42 @@ func (a *PackageArtifact) GetVersion() string {
 	return ans
 }
 
+func (p *PackageArtifact) WriteExtraMetadata(builddir string) error {
+	emfile := filepath.Join(builddir, p.GetPackage().GetFingerPrint()+ExtraMetadataSuffix+".zstd")
+
+	if p.Metadata == nil {
+		return fmt.Errorf("ExtraMetadata not present")
+	}
+
+	data, err := p.Metadata.JSON()
+	if err != nil {
+		return err
+	}
+
+	buffer := bytes.NewBuffer(data)
+
+	dst, err := os.Create(emfile)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	enc, err := zstd.NewWriter(dst)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(enc, buffer)
+	if err != nil {
+		enc.Close()
+		return err
+	}
+	if err := enc.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (a *PackageArtifact) WriteMetadataYaml(dst string) error {
 	// Update runtime package information
 	if a.Runtime == nil && a.CompileSpec != nil && a.CompileSpec.Package != nil {
@@ -334,13 +366,18 @@ func (a *PackageArtifact) WriteMetadataJson(dst string) error {
 
 func (a *PackageArtifact) WriteYaml(dst string) error {
 	// First compute checksum of artifact. When we write the yaml we want to write up-to-date informations.
+	// Temporary until refector
+	cachePath := a.CachePath
+	a.CachePath = a.Path
 	err := a.Hash()
 	if err != nil {
 		return errors.Wrap(err, "Failed generating checksums for artifact")
 	}
+	a.CachePath = cachePath
 
 	// Update runtime package information
 	if a.CompileSpec != nil && a.CompileSpec.Package != nil {
+		a.CompileSpec.Package.Path = a.TreePath
 		runtime, err := a.CompileSpec.Package.GetRuntimePackage()
 		if err != nil {
 			return errors.Wrapf(err, "getting runtime package for '%s'", a.CompileSpec.Package.HumanReadableString())
@@ -367,7 +404,7 @@ func (a *PackageArtifact) WriteYaml(dst string) error {
 		return errors.Wrap(err, "While marshalling for PackageArtifact YAML")
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dst, a.CompileSpec.GetPackage().GetMetadataFilePath()), data, os.ModePerm)
+	err = ioutil.WriteFile(dst, data, os.ModePerm)
 	if err != nil {
 		return errors.Wrap(err, "While writing PackageArtifact YAML")
 	}
@@ -664,7 +701,7 @@ func tarModifierWrapperFunc(path, dst string, header *tar.Header, content io.Rea
 
 	info := header.FileInfo()
 	// Write the file
-	err = t.CreateFile(dst, path, info.Mode(), bytes.NewReader(buffer.Bytes()), header)
+	_, err = t.CreateFile(dst, path, info.Mode(), bytes.NewReader(buffer.Bytes()), header)
 	if err != nil {
 		return err
 	}

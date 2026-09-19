@@ -10,8 +10,8 @@ import (
 )
 
 type CopyField struct {
-	Package     *pkg.DefaultPackage `json:"package" yaml:"package"`
-	Image       string              `json:"image" yaml:"image"`
+	Package     *pkg.DefaultPackage `json:"package,omitempty" yaml:"package,omitempty"`
+	Image       string              `json:"image,omitempty" yaml:"image,omitempty"`
 	Source      string              `json:"source" yaml:"source"`
 	Destination string              `json:"destination" yaml:"destination"`
 }

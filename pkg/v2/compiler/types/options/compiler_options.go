@@ -12,7 +12,7 @@ import (
 
 type Compiler struct {
 	PushImageRepository string                     `json:"push_image_repository,omitempty" yaml:"push_image_repository,omitempty"`
-	PullImageRepository []string                   `json:"pull_image_repository,omitempty" yaml:"push_image_repository,omitempty"`
+	PullImageRepository []string                   `json:"pull_image_repository,omitempty" yaml:"pull_image_repository,omitempty"`
 	PullFirst           bool                       `json:"pull_first,omitempty" yaml:"pull_first,omitempty"`
 	KeepImg             bool                       `json:"keepimg,omitempty" yaml:"keepimg,omitempty"`
 	Push                bool                       `json:"push,omitempty" yaml:"push,omitempty"`

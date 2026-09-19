@@ -5,6 +5,7 @@ See AUTHORS and LICENSE for the license details and contributors.
 package backend
 
 import (
+	"archive/tar"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	cfg "github.com/macaroni-os/anise/pkg/config"
 	fhelpers "github.com/macaroni-os/anise/pkg/helpers/file"
@@ -555,6 +557,7 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 			Dest:   "",
 		},
 	}
+	spec.Summary = true
 
 	buffered := !d.Config.GetGeneral().ShowBuildOutput
 	writer := NewBackendWriter(buffered)
@@ -592,6 +595,18 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 
 	Debug(":whale: Exported image:", remotetaggedImage)
 
+	art.Metadata = artifact.NewExtraMetadata()
+	art.Metadata.Files = tarformers.GetSummary().Files
+
+	// Keep compatibility until the files field will be
+	// removed.
+	art.Files = []string{}
+	for _, f := range art.Metadata.Files {
+		if f.Type == tar.TypeReg || f.Type == tar.TypeRegA {
+			art.Files = append(art.Files, f.Name)
+		}
+	}
+
 	return nil
 }
 
@@ -626,6 +641,24 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 
 	if err := art.Compress(pkgExtractDir, d.Config.GetGeneral().Concurrency); err != nil {
 		return fmt.Errorf("error met while creating package archive: %s", err.Error())
+	}
+
+	art.CompileSpec.GetPackage().SetBuildTimestamp(time.Now().String())
+
+	// Generate metadata.yaml file.
+	// Set CachePath equals to Path in order to use deprecated Checksum calculation.
+	//art.CachePath = art.Path
+	metadataFile := filepath.Join(builddir, art.GetPackage().GetFingerPrint()+
+		"."+pkg.PackageMetaSuffix)
+	err = art.WriteYaml(metadataFile)
+	if err != nil {
+		return err
+	}
+
+	// Generate extra-metadata.json file
+	err = art.WriteExtraMetadata(builddir)
+	if err != nil {
+		return err
 	}
 
 	return nil

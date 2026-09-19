@@ -429,7 +429,7 @@ func tarModifierWrapperFunc(path, dst string, header *tar.Header, content io.Rea
 
 	info := header.FileInfo()
 	// Write the file
-	err = t.CreateFile(dst, path, info.Mode(), bytes.NewReader(buffer.Bytes()), header)
+	_, err = t.CreateFile(dst, path, info.Mode(), bytes.NewReader(buffer.Bytes()), header)
 	if err != nil {
 		return err
 	}
