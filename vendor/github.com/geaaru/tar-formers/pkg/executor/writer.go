@@ -25,6 +25,9 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	specs "github.com/geaaru/tar-formers/pkg/specs"
+	"github.com/geaaru/tar-formers/pkg/tools"
 )
 
 type inodeResource struct {
@@ -144,6 +147,13 @@ func (t *TarFormers) InjectFile2Writer(tw *tar.Writer,
 			file, err.Error())
 	}
 
+	fIdentity := specs.NewFileIdentity(header.Typeflag, header.Name)
+	fIdentity.Size = header.Size
+
+	if t.TaskWriter.Summary && fIdentity.Name != "" {
+		t.summary.AddFile(fIdentity)
+	}
+
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return nil
@@ -169,10 +179,28 @@ func (t *TarFormers) InjectFile2Writer(tw *tar.Writer,
 	}
 	defer f.Close()
 
-	_, err = io.Copy(tw, f)
+	var writer io.Writer = tw
+	hashes := tools.NewFileHashesWriter()
+
+	if t.TaskWriter.Summary {
+		writer = io.MultiWriter(
+			tw,
+			hashes,
+		)
+	}
+
+	_, err = io.Copy(writer, f)
 	if err != nil {
 		return fmt.Errorf("Error on copy data for file %s: %s",
 			file, err.Error())
+	}
+
+	if t.TaskWriter.Summary {
+		fIdentity.Checksum = &specs.FileChecksum{
+			Sha512:  hashes.Sha512(),
+			Md5:     hashes.MD5(),
+			Blake2b: hashes.Blake2b(),
+		}
 	}
 
 	return nil

@@ -231,7 +231,7 @@ github.com/fxamacker/cbor/v2
 # github.com/geaaru/pkgs-checker v0.14.1
 ## explicit; go 1.21
 github.com/geaaru/pkgs-checker/pkg/gentoo
-# github.com/geaaru/tar-formers v0.10.0
+# github.com/geaaru/tar-formers v0.10.2
 ## explicit; go 1.26.0
 github.com/geaaru/tar-formers/pkg/executor
 github.com/geaaru/tar-formers/pkg/logger

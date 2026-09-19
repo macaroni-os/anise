@@ -163,7 +163,7 @@ func (t *TarFormers) RunTaskWriter(task *specs.SpecFile) error {
 	t.TaskWriter = task
 	t.TaskWriter.Prepare()
 
-	if t.Task.Summary {
+	if t.TaskWriter.Summary {
 		t.summary = specs.NewTaskSummary()
 	}
 
@@ -348,7 +348,7 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 			}
 		}
 
-		if t.Task.Summary {
+		if t.Task.Summary && fIdentity.Name != "" {
 			t.summary.AddFile(fIdentity)
 		}
 	}
@@ -588,7 +588,7 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 			}
 		}
 
-		if t.Task.Summary {
+		if t.Task.Summary && fIdentity.Name != "" {
 			t.summary.AddFile(fIdentity)
 		}
 
