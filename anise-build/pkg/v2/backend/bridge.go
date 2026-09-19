@@ -5,9 +5,14 @@ See AUTHORS and LICENSE for the license details and contributors.
 package backend
 
 import (
+	"fmt"
+
 	cfg "github.com/macaroni-os/anise/pkg/config"
+	. "github.com/macaroni-os/anise/pkg/logger"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/options"
+
+	"github.com/logrusorgru/aurora"
 )
 
 type BackendBridge struct {
@@ -29,7 +34,24 @@ func (bb *BackendBridge) GetOptions() *options.Compiler { return bb.Opts }
 func (bb *BackendBridge) BuildArtifact(dst string,
 	art *artifact.PackageArtifact,
 	solution *artifact.ArtifactsPack,
-	genPackage bool) error {
+	genPackage bool,
+	pos int) error {
+
+	var msg string
+
+	if genPackage {
+		msg = fmt.Sprintf(
+			"[%3d of %3d]",
+			aurora.Bold(aurora.BrightMagenta(pos)),
+			aurora.Bold(aurora.BrightMagenta(len(solution.Artifacts))))
+	} else {
+		msg = fmt.Sprintf(
+			"[%3d of %3d]",
+			aurora.BrightMagenta(pos),
+			aurora.BrightMagenta(len(solution.Artifacts)))
+	}
+	InfoC(fmt.Sprintf(":package:%s [%s] Compiling ... :coffee:",
+		msg, art.GetPackage().HumanReadableString()))
 
 	// Create Backend instance
 	backendService, err := NewBackend(bb.Opts.BackendType, bb.Config)

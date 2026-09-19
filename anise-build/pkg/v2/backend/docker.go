@@ -239,8 +239,6 @@ func (d *Dockerv3) CreateBuildImage(art *artifact.PackageArtifact,
 	solution *artifact.ArtifactsPack,
 	opts *options.Compiler) error {
 
-	Info(":package: Compiling", art.GetPackage().HumanReadableString(), ".... :coffee:")
-
 	// Using artefacts package thin to build the package Thin with
 	// the selected version from the solution and generate
 	// the hashing of the build image.
@@ -260,7 +258,9 @@ func (d *Dockerv3) CreateBuildImage(art *artifact.PackageArtifact,
 		art.BuildImageHash)
 
 	InfoC(fmt.Sprintf(
-		":factory: Building image %s", remoteBuildertaggedImage))
+		":factory: Building image %s for %s",
+		remoteBuildertaggedImage,
+		art.GetPackage().HumanReadableString()))
 
 	// Build staging directory
 	buildPkgdir := filepath.Join(builddir,
@@ -435,7 +435,9 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		art.FinalImageHash)
 
 	InfoC(fmt.Sprintf(
-		":factory: Prepare generation of final image %s", remotetaggedImage))
+		":factory: Prepare generation of final image %s for %s",
+		remotetaggedImage,
+		art.GetPackage().HumanReadableString()))
 
 	// Build staging directory
 	buildPkgdir := filepath.Join(builddir,
@@ -571,7 +573,7 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 
 	tarformers.SetReader(outReader)
 
-	Info("Run docker " + strings.Join(cpargs, " "))
+	DebugC("Run docker " + strings.Join(cpargs, " "))
 	err = exportCmd.Start()
 	if err != nil {
 		return fmt.Errorf("error on start docker cp command: %s", err.Error())

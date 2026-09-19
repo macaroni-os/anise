@@ -223,7 +223,7 @@ func (bm *BuildManager) buildPackageTask(
 	// Create the backend bridge
 	bridge := backend.NewBackendBridge(bm.Config, opts)
 
-	for _, p := range solution.Artifacts {
+	for idx, p := range solution.Artifacts {
 		elabp, _ := elaboratedPkgsMap.MatchVersion(p)
 		if elabp != nil {
 			// POST: package already elaborated. Skipping.
@@ -238,7 +238,7 @@ func (bm *BuildManager) buildPackageTask(
 			}
 		}
 
-		err := bridge.BuildArtifact(dst, p, solution, generatePackage)
+		err := bridge.BuildArtifact(dst, p, solution, generatePackage, idx+1)
 		if err != nil {
 			return err
 		}
