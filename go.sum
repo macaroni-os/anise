@@ -501,6 +501,8 @@ github.com/geaaru/tar-formers v0.10.1 h1:m2c5g445/iLjjBS16aJ/Mcrs1AorNlqr8yhjLM7
 github.com/geaaru/tar-formers v0.10.1/go.mod h1:chiJKjyO+DZOJRyZbA7ZakdSCxKw+CABEEa6kdQwLdI=
 github.com/geaaru/tar-formers v0.10.2 h1:Afz87l0KoKenwa7gJCwYPkrpTdpgQ1lxIyIfTcHyaIE=
 github.com/geaaru/tar-formers v0.10.2/go.mod h1:chiJKjyO+DZOJRyZbA7ZakdSCxKw+CABEEa6kdQwLdI=
+github.com/geaaru/tar-formers v0.10.3 h1:VDYsp7KSHLadlPcGre+4+9cLtkvOiQDN82CDQriv1n4=
+github.com/geaaru/tar-formers v0.10.3/go.mod h1:chiJKjyO+DZOJRyZbA7ZakdSCxKw+CABEEa6kdQwLdI=
 github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/ghodss/yaml v1.0.0 h1:wQHKEahhL6wmXdzwWG11gIVCkOv05bNOh+Rxn0yngAk=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=

@@ -283,7 +283,7 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 			if opts.Skip {
 				t.Logger.Debug(fmt.Sprintf(
 					"File %s skipped from writer callback.", name))
-				return nil
+				continue
 			}
 
 			if opts.Rename {
