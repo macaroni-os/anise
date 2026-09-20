@@ -142,43 +142,76 @@ func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
 
 		dockerSteps = fmt.Sprintf("FROM %s", art.CompileSpec.Image)
 
-	} else {
+	}
+
+	if len(art.GetPackage().GetRequires()) > 0 {
 
 		// NOTE: I consider that all dependencies are elaborated
 		//       before this package. This means that all artefacts
 		//       are already with the BuilderImageHash and
 		//       FinalImageHash attributes valorized.
 
-		if len(art.GetPackage().GetRequires()) > 0 {
+		solutionMap := solution.ToMap()
 
-			solutionMap := solution.ToMap()
+		for idx, art := range art.GetPackage().GetRequires() {
 
-			for idx, art := range art.GetPackage().GetRequires() {
+			// Retrieve artefact from solution to retrieves
+			// all hashes.
+			deps, err := solutionMap.GetArtifactsByKey(art.PackageName())
+			if err != nil {
+				return err
+			}
+
+			if idx == 0 {
+				dockerSteps += fmt.Sprintf("FROM %s:%s",
+					opts.PushImageRepository,
+					deps[0].GetFinalImageHash())
+			} else {
+				dockerSteps += "\n" +
+					fmt.Sprintf("COPY --from=%s:%s / /",
+						opts.PushImageRepository,
+						deps[0].GetFinalImageHash())
+			}
+		}
+
+	}
+
+	if art.CompileSpec.Copy != nil && len(art.CompileSpec.Copy) > 0 {
+
+		solutionMap := solution.ToMap()
+
+		for _, cf := range art.CompileSpec.Copy {
+
+			if cf.Package != nil {
 
 				// Retrieve artefact from solution to retrieves
 				// all hashes.
-				deps, err := solutionMap.GetArtifactsByKey(art.PackageName())
+				deps, err := solutionMap.GetArtifactsByKey(cf.Package.PackageName())
 				if err != nil {
 					return err
 				}
 
-				if idx == 0 {
-					dockerSteps += fmt.Sprintf("FROM %s:%s",
+				dockerSteps += "\n" +
+					fmt.Sprintf("COPY --from=%s:%s %s %s",
 						opts.PushImageRepository,
-						deps[0].GetFinalImageHash())
-				} else {
-					dockerSteps += "\n" +
-						fmt.Sprintf("COPY --from=%s:%s / /",
-							opts.PushImageRepository,
-							deps[0].GetFinalImageHash())
-				}
+						deps[0].GetFinalImageHash(),
+						cf.Source, cf.Destination)
+
+			} else {
+
+				dockerSteps += "\n" +
+					fmt.Sprintf("COPY --from=%s %s %s",
+						cf.Image, cf.Source, cf.Destination)
+
 			}
 
-		} else {
-
-			dockerSteps = "FROM scratch"
-
 		}
+
+	}
+
+	if dockerSteps == "" {
+
+		dockerSteps = "FROM scratch"
 
 	}
 
@@ -206,7 +239,7 @@ func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
 		}
 	}
 
-	Debug(fmt.Sprintf("Build docker file for package %s:\n%s\n",
+	Debug(fmt.Sprintf("Build docker file for package %s:\n\n%s\n",
 		art.GetPackage().PackageName(),
 		dockerSteps))
 
@@ -495,11 +528,6 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	remotetaggedImage := fmt.Sprintf("%s:%s", opts.PushImageRepository,
 		art.FinalImageHash)
 
-	if art.CompileSpec.PackageDir == "" {
-		// TODO
-		return fmt.Errorf("Empty package dir not yet implemented")
-	}
-
 	if !strings.HasSuffix(extractdir, "/") {
 		extractdir = extractdir + "/"
 	}
@@ -521,27 +549,6 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	Debug(":whale: Container for image " + remotetaggedImage + " (id " + idcontainer + ") created.")
 	defer d.deleteContainer(idcontainer)
 
-	// Prepare cp command where get stdout pipe.
-	// The source path is in the format <container-id>:/path
-	sourcePath := idcontainer + ":" + art.CompileSpec.PackageDir
-	// The destpath must consider that dockers on cp get only
-	// the final directory. So I need manually fix the Rename rule
-	// for tarformers.
-	paths := strings.Split(art.CompileSpec.PackageDir, "/")
-	replacePrefix := art.CompileSpec.PackageDir
-	if len(paths) > 2 {
-		// Avoid to set final / because we replace with empty string.
-		replacePrefix = "/" + paths[len(paths)-1]
-	} else if replacePrefix[len(replacePrefix)-1:] == "/" {
-		replacePrefix = replacePrefix[0 : len(replacePrefix)-1]
-	}
-
-	Debug(fmt.Sprintf(":whale: Copy container file from %s to %s (replace string %s)...",
-		sourcePath, extractdir, replacePrefix))
-
-	cpargs := []string{"cp", "-a", sourcePath, "-"}
-	exportCmd := exec.Command("docker", cpargs...)
-
 	// Prepare tar-formers stuff to execute
 	tarformers := d.createTarFormers()
 	spec := tarf_specs.NewSpecFile()
@@ -553,28 +560,62 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	// In general this must be always set a true.
 	spec.SameOwner = d.Config.GetGeneral().SameOwner
 	spec.BrokenLinksFatal = true
-	spec.RenamePath = []tarf_specs.RenameRule{
-		tarf_specs.RenameRule{
-			Source: replacePrefix,
-			Dest:   "",
-		},
-	}
 	spec.Summary = true
+
+	args := []string{}
+
+	if art.CompileSpec.PackageDir == "" {
+		args = []string{"export", idcontainer}
+
+		Debug(fmt.Sprintf(":whale: Extracts container files to %s...",
+			extractdir))
+
+	} else {
+
+		// Prepare cp command where get stdout pipe.
+		// The source path is in the format <container-id>:/path
+		sourcePath := idcontainer + ":" + art.CompileSpec.PackageDir
+		// The destpath must consider that dockers on cp get only
+		// the final directory. So I need manually fix the Rename rule
+		// for tarformers.
+		paths := strings.Split(art.CompileSpec.PackageDir, "/")
+		replacePrefix := art.CompileSpec.PackageDir
+		if len(paths) > 2 {
+			// Avoid to set final / because we replace with empty string.
+			replacePrefix = "/" + paths[len(paths)-1]
+		} else if replacePrefix[len(replacePrefix)-1:] == "/" {
+			replacePrefix = replacePrefix[0 : len(replacePrefix)-1]
+		}
+
+		Debug(fmt.Sprintf(":whale: Copy container file from %s to %s (replace string %s)...",
+			sourcePath, extractdir, replacePrefix))
+
+		args = []string{"cp", "-a", sourcePath, "-"}
+
+		spec.RenamePath = []tarf_specs.RenameRule{
+			tarf_specs.RenameRule{
+				Source: replacePrefix,
+				Dest:   "",
+			},
+		}
+	}
+
+	dockerCmd := exec.Command("docker", args...)
 
 	buffered := !d.Config.GetGeneral().ShowBuildOutput
 	writer := NewBackendWriter(buffered)
 
-	outReader, err := exportCmd.StdoutPipe()
+	outReader, err := dockerCmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed get stdout pipe for image %s: %s",
 			remotetaggedImage, err.Error())
 	}
-	exportCmd.Stderr = writer
+	dockerCmd.Stderr = writer
 
 	tarformers.SetReader(outReader)
 
-	DebugC("Run docker " + strings.Join(cpargs, " "))
-	err = exportCmd.Start()
+	DebugC("Run docker " + strings.Join(args, " "))
+	err = dockerCmd.Start()
 	if err != nil {
 		return fmt.Errorf("error on start docker cp command: %s", err.Error())
 	}
@@ -584,13 +625,13 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 		return fmt.Errorf("failed process container tarball: %s", err.Error())
 	}
 
-	err = exportCmd.Wait()
+	err = dockerCmd.Wait()
 	if err != nil {
 		return fmt.Errorf("failed wait command for image %s: %s",
 			remotetaggedImage, err.Error())
 	}
 
-	if exportCmd.ProcessState.ExitCode() != 0 {
+	if dockerCmd.ProcessState.ExitCode() != 0 {
 		return fmt.Errorf("Container export failed for image %s: %s",
 			remotetaggedImage, err.Error())
 	}
