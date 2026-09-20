@@ -586,6 +586,20 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	spec.BrokenLinksFatal = true
 	spec.Summary = true
 
+	if len(art.CompileSpec.Excludes) > 0 {
+		for i := range art.CompileSpec.Excludes {
+			spec.IgnoreRegexes = append(spec.IgnoreRegexes,
+				art.CompileSpec.Excludes[i])
+		}
+	}
+
+	if len(art.CompileSpec.Includes) > 0 {
+		for i := range art.CompileSpec.Includes {
+			spec.MatchPrefix = append(spec.MatchPrefix,
+				art.CompileSpec.Includes[i])
+		}
+	}
+
 	args := []string{}
 
 	if art.CompileSpec.PackageDir == "" {
@@ -714,7 +728,6 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 
 	// Generate metadata.yaml file.
 	// Set CachePath equals to Path in order to use deprecated Checksum calculation.
-	//art.CachePath = art.Path
 	metadataFile := filepath.Join(builddir, art.GetPackage().GetFingerPrint()+
 		"."+pkg.PackageMetaSuffix)
 	err = art.WriteYaml(metadataFile)
