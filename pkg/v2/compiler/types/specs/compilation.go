@@ -35,6 +35,7 @@ func (cs *CompilationSpec) signature() *Signature {
 		Copy:                cs.Copy,
 		Requires:            cs.Package.GetRequires(),
 		RequiresFinalImages: cs.RequiresFinalImages,
+		FlatImage:           cs.FlatImage,
 	}
 }
 
@@ -120,6 +121,8 @@ func (cs *CompilationSpec) GetExcludes() []string {
 func (cs *CompilationSpec) GetRetrieve() []string {
 	return cs.Retrieve
 }
+
+func (cs *CompilationSpec) GetFlatImage() bool { return cs.FlatImage }
 
 func (cs *CompilationSpec) HasFilters() bool {
 	if len(cs.Includes) > 0 || len(cs.Excludes) > 0 {
@@ -294,6 +297,7 @@ func NewComplationSpecLoad() *CompilationSpecLoad {
 		Retrieve:            []string{},
 		BuildOptions:        options.NewDefaultCompiler(),
 		RequiresFinalImages: false,
+		FlatImage:           false,
 	}
 }
 
@@ -313,6 +317,7 @@ func (csl *CompilationSpecLoad) ToSpec() *CompilationSpec {
 		Copy:                csl.Copy,
 		RequiresFinalImages: csl.RequiresFinalImages,
 		Package:             csl.DefaultPackage,
+		FlatImage:           csl.FlatImage,
 	}
 }
 

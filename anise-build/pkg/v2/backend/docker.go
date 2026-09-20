@@ -6,6 +6,7 @@ package backend
 
 import (
 	"archive/tar"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -425,7 +426,7 @@ func (d *Dockerv3) PullImage(art *artifact.PackageArtifact,
 func (d *Dockerv3) deleteContainer(name string) {
 	deleteargs := []string{"rm", name}
 
-	Debug(":whale: deleting container with name" + name)
+	Debug(":whale: deleting container with name " + name)
 	out, err := exec.Command("docker", deleteargs...).CombinedOutput()
 	if err != nil {
 		Warning("Failed delete container " + name + " for image: " + string(out))
@@ -504,10 +505,33 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 	}
 
 	if buildImage {
+
+		fmt.Println("FLAT ", art.CompileSpec.GetFlatImage())
+		finalImangeName := art.FinalImageHash
+
+		if art.CompileSpec.GetFlatImage() {
+			// If i need flat the image i set a building image name temporary
+			remotetaggedImage = fmt.Sprintf("%s:flatten-%s", opts.PushImageRepository,
+				art.FinalImageHash)
+		}
+
 		err = d.BuildImage(art, opts,
 			workdir, dockerFile, remotetaggedImage)
 		if err != nil {
 			return err
+		}
+
+		if art.CompileSpec.GetFlatImage() {
+
+			preflagImage := remotetaggedImage
+			remotetaggedImage = fmt.Sprintf("%s:%s", opts.PushImageRepository,
+				finalImangeName)
+
+			err = d.FlatImage(art, opts, preflagImage, remotetaggedImage)
+			if err != nil {
+				return err
+			}
+
 		}
 	}
 
@@ -703,6 +727,125 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (d *Dockerv3) FlatImage(art *artifact.PackageArtifact,
+	opts *options.Compiler, sourceImageName, imageName string) error {
+
+	// Create the container from specified image
+	createargs := []string{
+		"create", sourceImageName,
+		"-c", "sleep", "1",
+	}
+	Debug(":whale: Creating container from image " + sourceImageName)
+
+	// Creating a fake container to use for the export.
+	out, err := exec.Command("docker", createargs...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed creating container for image %s: %s",
+			sourceImageName, err.Error())
+	}
+	idcontainer := strings.TrimRight(string(out), "\n")
+	Debug(":whale: Container for image " + sourceImageName + " (id " + idcontainer + ") created.")
+	defer d.deleteContainer(idcontainer)
+
+	ctx := context.TODO()
+
+	// Prepare tar-formers stuff to execute
+	tarformers := d.createTarFormers()
+
+	// Prepare specfile for exporter reader
+	specExporter := tarf_specs.NewSpecFile()
+	specExporter.IgnoreFiles = []string{
+		"/.dockerenv",
+	}
+	specExporter.MapEntities = false
+	specExporter.SameChtimes = false
+	specExporter.SameOwner = d.Config.GetGeneral().SameOwner
+	specExporter.BrokenLinksFatal = true
+
+	// Prepare specfile for importer writer
+	specImporter := tarf_specs.NewSpecFile()
+	specImporter.MapEntities = false
+	specImporter.SameChtimes = false
+	specImporter.SameOwner = d.Config.GetGeneral().SameOwner
+	specImporter.BrokenLinksFatal = true
+	specImporter.Writer = tarf_specs.NewWriter()
+
+	// Prepare docker export command
+	exportCmd := exec.CommandContext(ctx,
+		"docker", "export", idcontainer)
+
+	// Prepare docker import command
+	importCmd := exec.CommandContext(ctx,
+		"docker", "import", "-", imageName)
+
+	// TODO: Add --platform, --message, --change
+
+	exportReader, err := exportCmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	importWriter, err := importCmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+
+	tarformers.SetReader(exportReader)
+	tarformers.SetWriter(importWriter)
+
+	if err = importCmd.Start(); err != nil {
+		return fmt.Errorf("docker import: %w", err)
+	}
+
+	if err = exportCmd.Start(); err != nil {
+		_ = importWriter.Close()
+		_ = importCmd.Process.Kill()
+		_ = importCmd.Wait()
+
+		return fmt.Errorf("docker export: %w", err)
+	}
+
+	err = tarformers.RunTaskBridge(specExporter, specImporter)
+
+	if err != nil {
+		_ = importWriter.Close()
+
+		_ = exportCmd.Process.Kill()
+		_ = importCmd.Process.Kill()
+
+		_ = exportCmd.Wait()
+		_ = importCmd.Wait()
+
+		return fmt.Errorf("tar bridge: %w", err)
+	}
+
+	if err = importWriter.Close(); err != nil {
+		_ = exportCmd.Process.Kill()
+		_ = importCmd.Process.Kill()
+
+		_ = exportCmd.Wait()
+		_ = importCmd.Wait()
+
+		return fmt.Errorf("close docker import stdin: %w", err)
+	}
+
+	if err = exportCmd.Wait(); err != nil {
+		_ = importCmd.Process.Kill()
+		_ = importCmd.Wait()
+
+		return fmt.Errorf("docker export: %w", err)
+	}
+
+	if err = importCmd.Wait(); err != nil {
+		return fmt.Errorf("docker import: %w", err)
+	}
+
+	InfoC(fmt.Sprintf(":spouting_whale: Flatten image %s generated for %s.",
+		imageName, art.GetPackage().HumanReadableString()))
 
 	return nil
 }

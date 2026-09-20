@@ -36,6 +36,7 @@ type CompilationSpec struct {
 	Copy []CopyField `json:"copy" yaml:"copy"`
 
 	RequiresFinalImages bool `json:"requires_final_images" yaml:"requires_final_images"`
+	FlatImage           bool `json:"flat_image,omitempty" yaml:"flat_image,omitempty"`
 
 	Package *pkg.DefaultPackage `json:"package" yaml:"package"`
 }
@@ -62,6 +63,7 @@ type CompilationSpecLoad struct {
 	Copy []CopyField `json:"copy,omitempty" yaml:"copy,omitempty"`
 
 	RequiresFinalImages bool `json:"requires_final_images,omitempty" yaml:"requires_final_images,omitempty"`
+	FlatImage           bool `json:"flat_image,omitempty" yaml:"flat_image,omitempty"`
 }
 
 // Signature is a portion of the spec that yields a signature for the hash
@@ -79,6 +81,7 @@ type Signature struct {
 	Copy                []CopyField
 	Requires            pkg.DefaultPackages
 	RequiresFinalImages bool
+	FlatImage           bool
 }
 
 type Compilationspecs []CompilationSpec
