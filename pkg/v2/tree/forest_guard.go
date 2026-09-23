@@ -12,6 +12,7 @@ import (
 	"github.com/macaroni-os/anise/pkg/helpers"
 	pkg "github.com/macaroni-os/anise/pkg/package"
 
+	"github.com/geaaru/pkgs-checker/pkg/gentoo"
 	_gentoo "github.com/geaaru/pkgs-checker/pkg/gentoo"
 )
 
@@ -28,6 +29,9 @@ func NewForestGuard(config *cfg.AniseConfig) *ForestGuard {
 		Trees:  []*TreeIdx{},
 	}
 }
+
+func (fg *ForestGuard) GetTrees() []*TreeIdx        { return fg.Trees }
+func (fg *ForestGuard) GetConfig() *cfg.AniseConfig { return fg.Config }
 
 func (fg *ForestGuard) LoadTrees(tpaths []string) error {
 	for _, t := range tpaths {
@@ -104,6 +108,48 @@ func (fg *ForestGuard) SearchPackage(p *pkg.DefaultPackage) ([]*TreeIdx, error) 
 		}
 
 		if tProcessed.HasPackages() {
+			ans = append(ans, tProcessed)
+		}
+	}
+
+	return ans, nil
+}
+
+func (fg *ForestGuard) SearchProvides(p *pkg.DefaultPackage) ([]*TreeIdx, error) {
+	ans := []*TreeIdx{}
+
+	for _, ti := range fg.Trees {
+
+		provs, present := ti.GetPackageProvides(p.PackageName())
+		if !present {
+			continue
+		}
+
+		tProcessed := NewTreeIdx(ti.TreePath, ti.Compress)
+		tProcessed.BaseDir = ti.BaseDir
+
+		for _, prov := range provs {
+
+			gprov, _ := gentoo.ParsePackageStr(fmt.Sprintf("%s-%s",
+				prov.PkgName, prov.PkgVersion))
+
+			pkg2check := &pkg.DefaultPackage{
+				Name:     gprov.GetPN(),
+				Category: gprov.Category,
+				Version:  prov.PkgVersion,
+			}
+
+			admitted, err := p.Admit(pkg2check)
+			if err != nil {
+				continue
+			}
+
+			if admitted {
+				tProcessed.AddProvide(p.PackageName(), prov)
+			}
+		}
+
+		if tProcessed.HasProvides() {
 			ans = append(ans, tProcessed)
 		}
 	}

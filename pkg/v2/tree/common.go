@@ -28,8 +28,9 @@ const (
 )
 
 type TreeIdx struct {
-	Map     map[string][]*TreeIdxPkg `json:"packages,omitempty" yaml:"packages,omitempty"`
-	BaseDir string                   `json:"basedir,omitempty" yaml:"basedir,omitempty"`
+	Map      map[string][]*TreeIdxPkg     `json:"packages,omitempty" yaml:"packages,omitempty"`
+	Provides map[string][]*TreeIdxProvide `json:"provides,omitempty" yaml:"provides,omitempty"`
+	BaseDir  string                       `json:"basedir,omitempty" yaml:"basedir,omitempty"`
 
 	Compress bool   `json:"-" yaml:"-"`
 	TreePath string `json:"-" yaml:"-"`
@@ -45,9 +46,24 @@ type TreeIdxPkg struct {
 	Path    string `json:"path,omitempty" yaml:"path,omitempty"`
 }
 
+type TreeIdxProvide struct {
+	PkgName    string `json:"package,omitempty" yaml:"package,omitempty"`
+	PkgVersion string `json:"package_version,omitempty" yaml:"package_version,omitempty"`
+	Version    string `json:"version,omitempty" yaml:"version,omitempty"`
+}
+
+func (tp *TreeIdxPkg) IsCollection() bool {
+	file := filepath.Base(tp.Path)
+	if file == pkg.PackageDefinitionFile {
+		return false
+	}
+	return true
+}
+
 func NewTreeIdx(tpath string, compress bool) *TreeIdx {
 	return &TreeIdx{
 		Map:      make(map[string][]*TreeIdxPkg, 0),
+		Provides: make(map[string][]*TreeIdxProvide, 0),
 		TreePath: tpath,
 		Compress: compress,
 	}
@@ -64,6 +80,18 @@ func (t *TreeIdx) DetectMode() *TreeIdx {
 	return t
 }
 
+func (t *TreeIdx) HasIndex() bool {
+	ans := false
+	f := filepath.Join(t.TreePath, IDX_FILE)
+	if fileHelper.Exists(f) {
+		ans = true
+	} else if fileHelper.Exists(f + ".zstd") {
+		ans = true
+	}
+
+	return ans
+}
+
 func (t *TreeIdx) AddPackage(name string, p *TreeIdxPkg) {
 	if v, ok := t.Map[name]; ok {
 		t.Map[name] = append(v, p)
@@ -72,8 +100,21 @@ func (t *TreeIdx) AddPackage(name string, p *TreeIdxPkg) {
 	}
 }
 
+func (t *TreeIdx) AddProvide(name string, p *TreeIdxProvide) {
+	if v, ok := t.Provides[name]; ok {
+		t.Provides[name] = append(v, p)
+	} else {
+		t.Provides[name] = []*TreeIdxProvide{p}
+	}
+}
+
 func (t *TreeIdx) GetPackageVersions(name string) ([]*TreeIdxPkg, bool) {
 	val, ok := t.Map[name]
+	return val, ok
+}
+
+func (t *TreeIdx) GetPackageProvides(name string) ([]*TreeIdxProvide, bool) {
+	val, ok := t.Provides[name]
 	return val, ok
 }
 
@@ -144,10 +185,19 @@ func (t *TreeIdx) Merge(tI *TreeIdx) {
 			t.AddPackage(k, tp)
 		}
 	}
+	for k, v := range tI.Provides {
+		for _, prov := range v {
+			t.AddProvide(k, prov)
+		}
+	}
 }
 
 func (t *TreeIdx) HasPackages() bool {
 	return len(t.Map) > 0
+}
+
+func (t *TreeIdx) HasProvides() bool {
+	return len(t.Provides) > 0
 }
 
 func (t *TreeIdx) Read(treeDir string) error {
@@ -248,6 +298,7 @@ func (t *TreeIdx) generateIdxDir(dir, base string, opts *GenOpts) (*TreeIdx, err
 			}
 
 			ans.Merge(tChildren)
+
 		} else if file.Name() == pkg.PackageDefinitionFile {
 
 			dp, err := ReadDefinitionFile(f)
@@ -266,6 +317,20 @@ func (t *TreeIdx) generateIdxDir(dir, base string, opts *GenOpts) (*TreeIdx, err
 				Path:    relf,
 			})
 
+			if dp.HasProvides() {
+
+				for _, prov := range dp.GetProvides() {
+
+					ans.AddProvide(prov.PackageName(),
+						&TreeIdxProvide{
+							Version:    prov.GetVersion(),
+							PkgName:    dp.PackageName(),
+							PkgVersion: dp.GetVersion(),
+						})
+
+				}
+			}
+
 		} else if file.Name() == pkg.PackageCollectionFile {
 
 			c, err := ReadCollectionFile(f)
@@ -281,6 +346,21 @@ func (t *TreeIdx) generateIdxDir(dir, base string, opts *GenOpts) (*TreeIdx, err
 					Version: p.GetVersion(),
 					Path:    relf,
 				})
+
+				if p.HasProvides() {
+
+					for _, prov := range p.GetProvides() {
+
+						ans.AddProvide(p.PackageName(),
+							&TreeIdxProvide{
+								Version:    prov.GetVersion(),
+								PkgName:    p.PackageName(),
+								PkgVersion: p.GetVersion(),
+							})
+
+					}
+				}
+
 			}
 		}
 
