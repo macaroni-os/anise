@@ -10,7 +10,7 @@ import (
 
 	. "github.com/macaroni-os/anise/pkg/logger"
 	spectooling "github.com/macaroni-os/anise/pkg/spectooling"
-	tree "github.com/macaroni-os/anise/pkg/tree"
+	tree "github.com/macaroni-os/anise/pkg/v2/tree"
 	version "github.com/macaroni-os/anise/pkg/versioner"
 
 	"github.com/spf13/cobra"
@@ -52,14 +52,14 @@ func NewTreeBumpCommand() *cobra.Command {
 				}
 			}
 			if toStdout {
-				data, err := spectooling.NewDefaultPackageSanitized(&pack).Yaml()
+				data, err := spectooling.NewDefaultPackageSanitized(pack).Yaml()
 				if err != nil {
 					Fatal("Error on yaml conversion: " + err.Error())
 				}
 				fmt.Println(string(data))
 			} else {
 
-				err = tree.WriteDefinitionFile(&pack, spec)
+				err = tree.WriteDefinitionFile(pack, spec)
 				if err != nil {
 					Fatal("Error on write definition file: " + err.Error())
 				}

@@ -235,7 +235,6 @@ func initCommand(rootCmd *cobra.Command, cfg *config.AniseConfig) {
 		newServerRepoCommand(cfg),
 		newTreeCommand(cfg),
 		newBuildCommand(cfg),
-		newBuildOldCommand(cfg),
 	)
 }
 

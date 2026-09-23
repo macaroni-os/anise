@@ -250,9 +250,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 	flags.Bool("rebuild", false, "To combine with --pull. Allows to rebuild the target package even if an image is available, against a local values file")
 	flags.StringArrayP("pull-repository", "p", []string{}, "A list of repositories to pull the cache from")
 	//flags.Bool("from-repositories", false, "Consume the user-defined repositories to pull specfiles from")
-	/*
-		flags.Bool("wait", false, "Don't build all intermediate images, but wait for them until they are available")
 
-	*/
 	return buildCmd
 }

@@ -6,12 +6,10 @@ package helpers
 
 import (
 	"errors"
-	"path/filepath"
 	"regexp"
 
-	"github.com/macaroni-os/anise/anise-build/pkg/installer"
-	"github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/config"
+
 	"github.com/spf13/cobra"
 )
 
@@ -21,21 +19,6 @@ func BindValuesFlags(cmd *cobra.Command) {
 
 func ValuesFlags() []string {
 	return AniseCfg.Viper.GetStringSlice("values")
-}
-
-// TemplateFolders returns the default folders which holds shared template between packages in a given tree path
-func TemplateFolders(fromRepo bool, treePaths []string) []string {
-	templateFolders := []string{}
-	if !fromRepo {
-		for _, t := range treePaths {
-			templateFolders = append(templateFolders, filepath.Join(t, "templates"))
-		}
-	} else {
-		for _, s := range installer.SystemRepositories(AniseCfg) {
-			templateFolders = append(templateFolders, filepath.Join(s.TreePath, "templates"))
-		}
-	}
-	return templateFolders
 }
 
 func CreateRegexArray(rgx []string) ([]*regexp.Regexp, error) {
@@ -61,7 +44,7 @@ func BindSolverFlags(cmd *cobra.Command) {
 	AniseCfg.Viper.BindPFlag("solver.implementation", cmd.Flags().Lookup("solver-implementation"))
 }
 
-func SetSolverConfig() (c *config.AniseSolverOptions) {
+func SetSolverConfig() (c *AniseSolverOptions) {
 	stype := AniseCfg.Viper.GetString("solver.type")
 	discount := AniseCfg.Viper.GetFloat64("solver.discount")
 	rate := AniseCfg.Viper.GetFloat64("solver.rate")
@@ -80,7 +63,7 @@ func SetSolverConfig() (c *config.AniseSolverOptions) {
 		implementation = stype
 	}
 
-	return &config.AniseSolverOptions{
+	return &AniseSolverOptions{
 		Type:           stype,
 		LearnRate:      float32(rate),
 		Discount:       float32(discount),

@@ -21,9 +21,9 @@ func newTreeCommand(config *cfg.AniseConfig) *cobra.Command {
 	treeGroupCmd.AddCommand(
 		NewTreeGenIdx(config),
 		NewTreePkglistCommand(config),
-		NewTreeValidateCommand(),
+		NewTreeValidateCommand(config),
 		NewTreeBumpCommand(),
-		NewTreeImageCommand(),
+		NewTreeImageCommand(config),
 		NewTreeRender(config),
 	)
 

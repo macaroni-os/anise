@@ -6,26 +6,37 @@ See AUTHORS and LICENSE for the license details and contributors.
 package cmd_tree
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"sync"
 
+	"github.com/geaaru/pkgs-checker/pkg/gentoo"
 	helpers "github.com/macaroni-os/anise/anise-build/cmd/helpers"
-	compiler "github.com/macaroni-os/anise/pkg/compiler"
-	sd "github.com/macaroni-os/anise/pkg/compiler/backend"
-	"github.com/macaroni-os/anise/pkg/compiler/types/options"
 	. "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
-	"github.com/macaroni-os/anise/pkg/solver"
-	tree "github.com/macaroni-os/anise/pkg/tree"
+	tree "github.com/macaroni-os/anise/pkg/v2/tree"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/semaphore"
 )
+
+type ValidateTask struct {
+	TreeIdx    *tree.TreeIdx
+	TreeIdxPkg *tree.TreeIdxPkg
+	Pn         string
+
+	waitGroup *sync.WaitGroup
+	ctx       *context.Context
+	semaphore *semaphore.Weighted
+
+	Error error
+}
 
 type ValidateOpts struct {
 	WithSolver    bool
@@ -36,17 +47,12 @@ type ValidateOpts struct {
 	Excludes      []string
 	Matches       []string
 
-	// Runtime validate stuff
-	RuntimeCacheDeps *pkg.InMemoryDatabase
-	RuntimeReciper   *tree.InstallerRecipe
-
-	// Buildtime validate stuff
-	BuildtimeCacheDeps *pkg.InMemoryDatabase
-	BuildtimeReciper   *tree.CompilerRecipe
+	ForestGuard *tree.ForestGuard
 
 	Mutex      sync.Mutex
 	BrokenPkgs int
 	BrokenDeps int
+	Packages   int
 
 	Errors []error
 }
@@ -63,79 +69,33 @@ func (o *ValidateOpts) IncrBrokenDeps() {
 	o.BrokenDeps++
 }
 
+func (o *ValidateOpts) IncrPackages() {
+	o.Mutex.Lock()
+	defer o.Mutex.Unlock()
+	o.Packages++
+}
+
 func (o *ValidateOpts) AddError(err error) {
 	o.Mutex.Lock()
 	defer o.Mutex.Unlock()
 	o.Errors = append(o.Errors, err)
 }
 
-func validatePackage(p pkg.Package, checkType string, opts *ValidateOpts, reciper tree.Builder, cacheDeps *pkg.InMemoryDatabase) error {
-	var errstr string
-	var ans error
-
-	var depSolver solver.PackageSolver
-
-	if opts.WithSolver {
-		emptyInstallationDb := pkg.NewInMemoryDatabase(false)
-		depSolver = solver.NewSolver(solver.Options{Type: solver.SingleCoreSimple}, pkg.NewInMemoryDatabase(false),
-			reciper.GetDatabase(),
-			emptyInstallationDb)
-	}
-
-	found, err := reciper.GetDatabase().FindPackages(
-		&pkg.DefaultPackage{
-			Name:     p.GetName(),
-			Category: p.GetCategory(),
-			Version:  ">=0",
-		},
-	)
-
-	if err != nil || len(found) < 1 {
-		if err != nil {
-			errstr = err.Error()
-		} else {
-			errstr = "No packages"
-		}
-		Error(fmt.Sprintf("[%9s] %s/%s-%s: Broken. No versions could be found by database %s",
-			checkType,
-			p.GetCategory(), p.GetName(), p.GetVersion(),
-			errstr,
-		))
-
-		opts.IncrBrokenDeps()
-
-		return errors.New(
-			fmt.Sprintf("[%9s] %s/%s-%s: Broken. No versions could be found by database %s",
-				checkType,
-				p.GetCategory(), p.GetName(), p.GetVersion(),
-				errstr,
-			))
-	}
-
-	// Ensure that we use the right package from right recipier for deps
-	pReciper, err := reciper.GetDatabase().FindPackage(
-		&pkg.DefaultPackage{
-			Name:     p.GetName(),
-			Category: p.GetCategory(),
-			Version:  p.GetVersion(),
-		},
-	)
-	if err != nil {
-		errstr = fmt.Sprintf("[%9s] %s/%s-%s: Error on retrieve package - %s.",
-			checkType,
-			p.GetCategory(), p.GetName(), p.GetVersion(),
-			err.Error(),
-		)
-		Error(errstr)
-
-		return errors.New(errstr)
-	}
-	p = pReciper
-
-	pkgstr := fmt.Sprintf("%s/%s-%s", p.GetCategory(), p.GetName(),
-		p.GetVersion())
+func validatePackage(task *ValidateTask, opts *ValidateOpts,
+	ch chan ValidateTask) {
 
 	validpkg := true
+	var err, lastError error
+	var pruntime *pkg.DefaultPackage
+
+	defer task.waitGroup.Done()
+
+	defFile := filepath.Join(task.TreeIdx.TreePath,
+		task.TreeIdx.BaseDir,
+		task.TreeIdxPkg.Path,
+	)
+	pkgstr := fmt.Sprintf("%s-%s", task.Pn, task.TreeIdxPkg.Version)
+	gpkg, _ := gentoo.ParsePackageStr(pkgstr)
 
 	if len(opts.Matches) > 0 {
 		matched := false
@@ -147,9 +107,17 @@ func validatePackage(p pkg.Package, checkType string, opts *ValidateOpts, recipe
 		}
 
 		if !matched {
-			return nil
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+			}
+			return
 		}
 	}
+
+	opts.IncrPackages()
 
 	if len(opts.Excludes) > 0 {
 		excluded := false
@@ -161,276 +129,233 @@ func validatePackage(p pkg.Package, checkType string, opts *ValidateOpts, recipe
 		}
 
 		if excluded {
-			return nil
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+			}
+			return
 		}
 	}
 
-	if checkType == "buildtime" {
+	if task.TreeIdxPkg.IsCollection() {
 
-		// Retrieve the build specs
-		c := compiler.NewAniseCompiler(
-			sd.NewSimpleDockerBackend(),
-			reciper.GetDatabase(),
-			options.Concurrency(2),
-		)
-
-		spec, err := c.FromPackage(p)
+		// Load collection.yaml and retrieve package data.
+		collection, err := tree.ReadCollectionFile(defFile)
 		if err != nil {
-			return errors.New(
-				fmt.Sprintf(
-					"Error on retrieve build specs for package %s: %s",
-					p.HumanReadableString(), err.Error()))
-			Error(err.Error())
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+				Error: fmt.Errorf(
+					"Error on read collection.yaml %s: %s",
+					defFile, err.Error()),
+			}
+			return
 		}
 
-		valid, err := spec.IsValid()
-		if !valid {
-			errstr := fmt.Sprintf(
-				"For package %s/%s-%s found invalid build.yaml: %s",
-				p.GetCategory(), p.GetName(), p.GetVersion(),
-				err.Error())
-
-			Error(errstr)
-
-			opts.AddError(errors.New(errstr))
-
-			validpkg = false
+		pruntime, err = collection.GetPackageFromGentooPkg(gpkg)
+		if err != nil {
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+				Error: fmt.Errorf(
+					"Error on retrieve package %s from %s: %s",
+					gpkg.GetPVR(), defFile,
+					err.Error()),
+			}
+			return
 		}
+
+	} else {
+
+		// Load definition.yaml
+		pruntime, err = tree.ReadDefinitionFile(defFile)
+		if err != nil {
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+				Error: fmt.Errorf(
+					"Error on read definition.yaml %s: %s",
+					defFile, err.Error()),
+			}
+			return
+		}
+
 	}
 
-	Info(fmt.Sprintf("[%9s] Checking package ", checkType)+
-		fmt.Sprintf("%s/%s-%s", p.GetCategory(), p.GetName(), p.GetVersion()),
-		"with", len(p.GetRequires()), "dependencies and", len(p.GetConflicts()), "conflicts.")
+	// Check if all runtime dependencies are present in the tree
+	numRuntimeDeps := len(pruntime.GetRequires())
 
-	processRelations := func(r *pkg.DefaultPackage, idx, tot int, conflict bool) {
-		var deps pkg.Packages
-		var err error
-		if r.IsSelector() {
-			deps, err = reciper.GetDatabase().FindPackages(
-				&pkg.DefaultPackage{
-					Name:     r.GetName(),
-					Category: r.GetCategory(),
-					Version:  r.GetVersion(),
-				},
-			)
-		} else {
-			deps = append(deps, r)
-		}
+	if numRuntimeDeps > 0 {
 
-		if err != nil || len(deps) < 1 {
+		for _, dep := range pruntime.GetRequires() {
 
-			if conflict {
-				Warning(fmt.Sprintf("[%9s] %s/%s-%s: Conflict %s-%s-%s not available. Ignoring.",
-					checkType,
-					p.GetCategory(), p.GetName(), p.GetVersion(),
-					r.GetCategory(), r.GetName(), r.GetVersion(),
-				))
-				return
-			}
-			if err != nil {
-				errstr = err.Error()
-			} else {
-				errstr = "No packages"
-			}
-			Error(fmt.Sprintf("[%9s] %s/%s-%s: Broken Dep %s/%s-%s - %s",
-				checkType,
-				p.GetCategory(), p.GetName(), p.GetVersion(),
-				r.GetCategory(), r.GetName(), r.GetVersion(),
-				errstr,
-			))
+			depOk := false
+			trees, _ := opts.ForestGuard.SearchPackage(dep)
 
-			opts.IncrBrokenDeps()
+			for _, ti := range trees {
+				versions, _ := ti.GetPackageVersions(dep.PackageName())
 
-			ans = errors.New(
-				fmt.Sprintf("[%9s] %s/%s-%s: Broken Dep %s/%s-%s - %s",
-					checkType,
-					p.GetCategory(), p.GetName(), p.GetVersion(),
-					r.GetCategory(), r.GetName(), r.GetVersion(),
-					errstr))
+				for _, ver := range versions {
+					pkg2check := &pkg.DefaultPackage{
+						Name:     pruntime.Name,
+						Category: pruntime.Category,
+						Version:  ver.Version,
+					}
 
-			validpkg = false
+					valid, err := pruntime.Admit(pkg2check)
+					if err != nil {
+						lastError = err
+						break
+					}
+					if valid {
+						depOk = true
+						// POST: This version could be used from the package.
+						break
+					}
 
-		} else {
-
-			Debug(fmt.Sprintf("[%9s] Find packages for dep", checkType),
-				fmt.Sprintf("%s/%s-%s", r.GetCategory(), r.GetName(), r.GetVersion()))
-
-			if opts.WithSolver {
-
-				Info(fmt.Sprintf("[%9s]  :soap: [%2d/%2d] %s/%s-%s: %s/%s-%s",
-					checkType,
-					idx+1, tot,
-					p.GetCategory(), p.GetName(), p.GetVersion(),
-					r.GetCategory(), r.GetName(), r.GetVersion(),
-				))
-
-				// Check if the solver is already been done for the deep
-				_, err := cacheDeps.Get(r.HashFingerprint(""))
-				if err == nil {
-					Debug(fmt.Sprintf("[%9s]  :direct_hit: Cache Hit for dep", checkType),
-						fmt.Sprintf("%s/%s-%s", r.GetCategory(), r.GetName(), r.GetVersion()))
-					return
 				}
 
-				Spinner(32)
-				solution, err := depSolver.Install(pkg.Packages{r})
-				ass := solution.SearchByName(r.GetPackageName())
-				SpinnerStop()
-				if err == nil {
-					if ass == nil {
+				if depOk {
+					break
+				}
+			}
 
-						ans = errors.New(
-							fmt.Sprintf("[%9s] %s/%s-%s: solution doesn't retrieve package %s/%s-%s.",
-								checkType,
-								p.GetCategory(), p.GetName(), p.GetVersion(),
-								r.GetCategory(), r.GetName(), r.GetVersion(),
-							))
+			if !depOk {
+				// Check if the dependency is a provides
+				provides, _ := opts.ForestGuard.SearchProvides(dep)
 
-						if AniseCfg.GetGeneral().Debug {
-							for idx, pa := range solution {
-								fmt.Println(fmt.Sprintf("[%9s] %s/%s-%s: solution %d: %s",
-									checkType,
-									p.GetCategory(), p.GetName(), p.GetVersion(), idx,
-									pa.Package.GetPackageName()))
-							}
+				for _, ti := range provides {
+					provs, _ := ti.GetPackageProvides(dep.PackageName())
+
+					for _, ver := range provs {
+
+						gprov, _ := gentoo.ParsePackageStr(
+							fmt.Sprintf("%s-%s", ver.PkgName, ver.PkgVersion))
+
+						depWithProvides := &pkg.DefaultPackage{
+							Name:     gprov.GetPN(),
+							Category: gprov.Category,
+							Version:  ver.PkgVersion,
 						}
 
-						Error(ans.Error())
-						opts.IncrBrokenDeps()
-						validpkg = false
-					} else {
-						_, err = solution.Order(reciper.GetDatabase(), ass.Package.GetFingerPrint())
+						trees, _ := opts.ForestGuard.SearchPackage(depWithProvides)
+
+						if len(trees) == 0 {
+							continue
+						}
+
+						valid, err := pruntime.Admit(depWithProvides)
+						if err != nil {
+							lastError = err
+							break
+						}
+						if valid {
+							depOk = true
+							// POST: This version could be used from the package.
+							break
+						}
+
+					}
+
+					if depOk {
+						break
 					}
 				}
-
-				if err != nil {
-
-					Error(fmt.Sprintf("[%9s] %s/%s-%s: solver broken for dep %s/%s-%s - %s",
-						checkType,
-						p.GetCategory(), p.GetName(), p.GetVersion(),
-						r.GetCategory(), r.GetName(), r.GetVersion(),
-						err.Error(),
-					))
-
-					ans = errors.New(
-						fmt.Sprintf("[%9s] %s/%s-%s: solver broken for Dep %s/%s-%s - %s",
-							checkType,
-							p.GetCategory(), p.GetName(), p.GetVersion(),
-							r.GetCategory(), r.GetName(), r.GetVersion(),
-							err.Error()))
-
-					opts.IncrBrokenDeps()
-					validpkg = false
-				}
-
-				// Register the key
-				cacheDeps.Set(r.HashFingerprint(""), "1")
-
 			}
+
+			if !depOk {
+
+				opts.IncrBrokenDeps()
+
+				lastError = fmt.Errorf(
+					"[runtime] [%s] Dependency %s not found :fire:.",
+					pruntime.HumanReadableString(),
+					dep.HumanReadableString())
+
+			} else {
+
+				DebugC(fmt.Errorf(
+					"[runtime] [%s] Dependency %s :heavy_check_mark:",
+					pruntime.HumanReadableString(),
+					dep.HumanReadableString()))
+			}
+
 		}
-	} // end processRelations
 
-	all := p.GetRequires()
-	all = append(all, p.GetConflicts()...)
-	nTot := len(all)
-	all = nil
-	for idx, r := range p.GetRequires() {
-		processRelations(r, idx, nTot, false)
 	}
 
-	for idx, r := range p.GetConflicts() {
-		processRelations(r, idx, nTot, true)
-	}
-
-	if !validpkg {
+	if lastError != nil {
 		opts.IncrBrokenPkgs()
-	}
-
-	return ans
-}
-
-func validateWorker(i int,
-	wg *sync.WaitGroup,
-	c <-chan pkg.Package,
-	opts *ValidateOpts) {
-
-	defer wg.Done()
-
-	for p := range c {
-
-		if opts.OnlyBuildtime {
-			// Check buildtime compiler/deps
-			err := validatePackage(p, "buildtime", opts, opts.BuildtimeReciper, opts.BuildtimeCacheDeps)
-			if err != nil {
-				opts.AddError(err)
-				continue
-			}
-		} else if opts.OnlyRuntime {
-
-			// Check runtime installer/deps
-			err := validatePackage(p, "runtime", opts, opts.RuntimeReciper, opts.RuntimeCacheDeps)
-			if err != nil {
-				opts.AddError(err)
-				continue
-			}
-
-		} else {
-
-			// Check runtime installer/deps
-			err := validatePackage(p, "runtime", opts, opts.RuntimeReciper, opts.RuntimeCacheDeps)
-			if err != nil {
-				opts.AddError(err)
-				continue
-			}
-
-			// Check buildtime compiler/deps
-			err = validatePackage(p, "buildtime", opts, opts.BuildtimeReciper, opts.BuildtimeCacheDeps)
-			if err != nil {
-				opts.AddError(err)
-			}
-
+		task.semaphore.Release(1)
+		ch <- ValidateTask{
+			Pn:         task.Pn,
+			TreeIdx:    task.TreeIdx,
+			TreeIdxPkg: task.TreeIdxPkg,
+			Error:      lastError,
 		}
-
+		return
 	}
+
+	task.semaphore.Release(1)
+	if !validpkg {
+		ch <- ValidateTask{
+			Pn:         task.Pn,
+			TreeIdx:    task.TreeIdx,
+			TreeIdxPkg: task.TreeIdxPkg,
+			Error:      lastError,
+		}
+	} else {
+		ch <- ValidateTask{
+			Pn:         task.Pn,
+			TreeIdx:    task.TreeIdx,
+			TreeIdxPkg: task.TreeIdxPkg,
+		}
+	}
+
 }
 
-func initOpts(opts *ValidateOpts, onlyRuntime, onlyBuildtime, withSolver bool, treePaths []string) {
+func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtime,
+	withSolver bool, treePaths []string) {
+
 	var err error
 
 	opts.OnlyBuildtime = onlyBuildtime
 	opts.OnlyRuntime = onlyRuntime
 	opts.WithSolver = withSolver
-	opts.RuntimeReciper = nil
-	opts.BuildtimeReciper = nil
 	opts.BrokenPkgs = 0
 	opts.BrokenDeps = 0
 
-	if onlyBuildtime {
-		opts.BuildtimeReciper = (tree.NewCompilerRecipe(pkg.NewInMemoryDatabase(false))).(*tree.CompilerRecipe)
-	} else if onlyRuntime {
-		opts.RuntimeReciper = (tree.NewInstallerRecipe(pkg.NewInMemoryDatabase(false))).(*tree.InstallerRecipe)
-	} else {
-		opts.BuildtimeReciper = (tree.NewCompilerRecipe(pkg.NewInMemoryDatabase(false))).(*tree.CompilerRecipe)
-		opts.RuntimeReciper = (tree.NewInstallerRecipe(pkg.NewInMemoryDatabase(false))).(*tree.InstallerRecipe)
-	}
-
-	opts.RuntimeCacheDeps = pkg.NewInMemoryDatabase(false).(*pkg.InMemoryDatabase)
-	opts.BuildtimeCacheDeps = pkg.NewInMemoryDatabase(false).(*pkg.InMemoryDatabase)
+	// Load the index file
+	opts.ForestGuard = tree.NewForestGuard(config)
 
 	for _, treePath := range treePaths {
-		Info(fmt.Sprintf("Loading :deciduous_tree: %s...", treePath))
-		if opts.BuildtimeReciper != nil {
-			err = opts.BuildtimeReciper.Load(treePath)
-			if err != nil {
-				Fatal("Error on load tree ", err)
-			}
+		Info(fmt.Sprintf(":deciduous_tree: Loading %s...", treePath))
+		// Load singular path for time to improve user messages
+		tIdx := tree.NewTreeIdx(treePath, true)
+
+		if tIdx.HasIndex() {
+			err = tIdx.Read(treePath)
+		} else {
+			Warning("Tree without index. Run `anise-build tree genidx`. Trying to generate indexes in memory")
+			err = tIdx.Generate(treePath,
+				&tree.GenOpts{
+					DryRun:   false,
+					OnlyMain: true,
+				})
 		}
-		if opts.RuntimeReciper != nil {
-			err = opts.RuntimeReciper.Load(treePath)
-			if err != nil {
-				Fatal("Error on load tree ", err)
-			}
+		if err != nil {
+			Fatal(err.Error())
 		}
+
+		opts.ForestGuard.Trees = append(opts.ForestGuard.Trees, tIdx)
 	}
 
 	opts.RegExcludes, err = helpers.CreateRegexArray(opts.Excludes)
@@ -444,7 +369,7 @@ func initOpts(opts *ValidateOpts, onlyRuntime, onlyBuildtime, withSolver bool, t
 
 }
 
-func NewTreeValidateCommand() *cobra.Command {
+func NewTreeValidateCommand(config *AniseConfig) *cobra.Command {
 	var excludes []string
 	var matches []string
 	var treePaths []string
@@ -466,9 +391,6 @@ func NewTreeValidateCommand() *cobra.Command {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			var reciper tree.Builder
-
-			concurrency := AniseCfg.GetGeneral().Concurrency
 
 			withSolver, _ := cmd.Flags().GetBool("with-solver")
 			onlyRuntime, _ := cmd.Flags().GetBool("only-runtime")
@@ -476,28 +398,50 @@ func NewTreeValidateCommand() *cobra.Command {
 
 			opts.Excludes = excludes
 			opts.Matches = matches
-			initOpts(&opts, onlyRuntime, onlyBuildtime, withSolver, treePaths)
+			initOpts(config, &opts, onlyRuntime, onlyBuildtime, withSolver, treePaths)
 
-			// We need at least one valid reciper for get list of the packages.
-			if onlyBuildtime {
-				reciper = opts.BuildtimeReciper
-			} else {
-				reciper = opts.RuntimeReciper
-			}
+			channels := []chan ValidateTask{}
 
-			all := make(chan pkg.Package)
-
+			ctx := context.TODO()
 			var wg = new(sync.WaitGroup)
+			semaphore := semaphore.NewWeighted(
+				int64(config.GetGeneral().Concurrency),
+			)
 
-			for i := 0; i < concurrency; i++ {
-				wg.Add(1)
-				go validateWorker(i, wg, all, &opts)
-			}
-			for _, p := range reciper.GetDatabase().World() {
-				all <- p
-			}
-			close(all)
+			nPkgs := 0
+			for _, tree := range opts.ForestGuard.GetTrees() {
 
+				for pn, treePkgs := range tree.Map {
+					for _, pv := range treePkgs {
+						task := &ValidateTask{
+							Pn:         pn,
+							TreeIdx:    tree,
+							TreeIdxPkg: pv,
+							waitGroup:  wg,
+							ctx:        &ctx,
+							semaphore:  semaphore,
+						}
+
+						channels = append(channels, make(chan ValidateTask))
+
+						wg.Add(1)
+						semaphore.Acquire(ctx, 1)
+
+						go validatePackage(task, &opts, channels[nPkgs])
+						nPkgs++
+					}
+
+				}
+			}
+
+			for i := 0; i < nPkgs; i++ {
+
+				resp := <-channels[i]
+				if resp.Error != nil {
+					opts.AddError(resp.Error)
+				}
+
+			}
 			wg.Wait()
 
 			stringerrs := []string{}
@@ -506,16 +450,16 @@ func NewTreeValidateCommand() *cobra.Command {
 			}
 			sort.Strings(stringerrs)
 			for _, e := range stringerrs {
-				fmt.Println(e)
+				Error(e)
 			}
 
-			// fmt.Println("Broken packages:", brokenPkgs, "(", brokenDeps, "deps ).")
 			if len(stringerrs) != 0 {
-				Error(fmt.Sprintf("Found %d broken packages and %d broken deps.",
+				Fatal(fmt.Sprintf("Found %d broken packages and %d broken deps.",
 					opts.BrokenPkgs, opts.BrokenDeps))
 				Fatal("Errors: " + strconv.Itoa(len(stringerrs)))
 			} else {
-				Info("All good! :white_check_mark:")
+				Info(fmt.Sprintf(":white_check_mark: Elaborated %d packages. All good!",
+					opts.Packages))
 				os.Exit(0)
 			}
 		},

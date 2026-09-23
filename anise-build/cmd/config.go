@@ -8,10 +8,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/macaroni-os/anise/anise-build/pkg/installer"
 	config "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	"github.com/macaroni-os/anise/pkg/subsets"
+	"github.com/macaroni-os/anise/pkg/v2/installer"
 
 	"github.com/spf13/cobra"
 )

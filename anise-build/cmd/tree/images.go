@@ -6,22 +6,22 @@ See AUTHORS and LICENSE for the license details and contributors.
 package cmd_tree
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	bhelpers "github.com/macaroni-os/anise/anise-build/cmd/helpers"
-	helpers "github.com/macaroni-os/anise/cmd/helpers"
-	"github.com/macaroni-os/anise/pkg/compiler"
-	"github.com/macaroni-os/anise/pkg/compiler/backend"
-	"github.com/macaroni-os/anise/pkg/compiler/types/options"
+	"github.com/macaroni-os/anise/anise-build/pkg/v2/backend"
+	"github.com/macaroni-os/anise/anise-build/pkg/v2/solver"
 	. "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
-	pkg "github.com/macaroni-os/anise/pkg/package"
-	tree "github.com/macaroni-os/anise/pkg/tree"
+	"github.com/macaroni-os/anise/pkg/v2/compiler/types/options"
 
-	"github.com/ghodss/yaml"
+	. "github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 type TreePackageResult struct {
@@ -36,7 +36,7 @@ type TreeResults struct {
 	Packages []TreePackageResult `json:"packages"`
 }
 
-func NewTreeImageCommand() *cobra.Command {
+func NewTreeImageCommand(config *AniseConfig) *cobra.Command {
 
 	var ans = &cobra.Command{
 		Use:   "images [OPTIONS]",
@@ -59,85 +59,105 @@ func NewTreeImageCommand() *cobra.Command {
 
 			treePath, _ := cmd.Flags().GetStringArray("tree")
 			imageRepository := viper.GetString("image-repository")
-			pullRepo, _ := cmd.Flags().GetStringArray("pull-repository")
+			backendType, _ := cmd.Flags().GetString("backend")
+			//pullRepo, _ := cmd.Flags().GetStringArray("pull-repository")
 			values := bhelpers.ValuesFlags()
+			templatesDirs := config.Viper.GetStringSlice("templates-dir")
+			stype := ""
 
 			out, _ := cmd.Flags().GetString("output")
 			if out != "terminal" {
 				AniseCfg.GetLogging().SetLogLevel("error")
 			}
 
-			reciper := tree.NewCompilerRecipe(pkg.NewInMemoryDatabase(false))
+			buildManager := solver.NewBuildManager(config)
+			opts := solver.NewBuildSolverOpts()
 
-			for _, t := range treePath {
-				err := reciper.Load(t)
-				if err != nil {
-					Fatal("Error on load tree ", err)
-				}
+			err := buildManager.PrepareSolver(
+				stype, opts, treePath,
+				templatesDirs, values)
+			if err != nil {
+				Fatal(err)
 			}
-			compilerBackend := backend.NewSimpleDockerBackend()
 
-			opts := *AniseCfg.GetSolverOptions()
-			aniseCompiler := compiler.NewAniseCompiler(
-				compilerBackend,
-				reciper.GetDatabase(),
-				options.WithBuildValues(values),
+			candidates, err := buildManager.BuildPretend(args)
+			if err != nil {
+				Fatal(err)
+			}
+
+			// Prepare build options
+			buildOpts := options.NewDefaultCompiler()
+			buildOpts.Apply(
 				options.WithPushRepository(imageRepository),
-				options.WithPullRepositories(pullRepo),
-				options.WithTemplateFolder(bhelpers.TemplateFolders(false, treePath)),
-				options.WithSolverOptions(opts),
+				options.WithBackendType(backendType),
 			)
 
-			a := args[0]
-
-			pack, err := helpers.ParsePackageStr(AniseCfg, a)
+			backendService, err := backend.NewBackend(backendType, config)
 			if err != nil {
-				Fatal("Invalid package string ", a, ": ", err.Error())
+				Fatal(err)
 			}
+			// Create the backend bridge
+			withDeps := true
+			results = TreeResults{}
 
-			spec, err := aniseCompiler.FromPackage(pack)
-			if err != nil {
-				Fatal("Error: " + err.Error())
-			}
+			solutionMap := candidates.ToMap()
+			// Generate final image name for every candidate
+			for idx := range candidates.Artifacts {
+				pThin, err := candidates.Artifacts[idx].ToPackageThin(withDeps, solutionMap)
+				if err != nil {
+					Fatal(err)
+				}
 
-			ht := compiler.NewHashTree(reciper.GetDatabase())
-			hashtree, err := ht.Query(aniseCompiler, spec)
-			if err != nil {
-				Fatal("Error: " + err.Error())
-			}
-
-			for _, assertion := range hashtree.Solution { //highly dependent on the order
-
-				//buildImageHash := imageRepository + ":" + assertion.Hash.BuildHash
-				currentPackageImageHash := imageRepository + ":" + assertion.Hash.PackageHash
+				err = backendService.GenerateFinalImageHash(candidates.Artifacts[idx],
+					pThin, buildOpts)
+				if err != nil {
+					Fatal(err)
+				}
 
 				results.Packages = append(results.Packages, TreePackageResult{
-					Name:     assertion.Package.GetName(),
-					Version:  assertion.Package.GetVersion(),
-					Category: assertion.Package.GetCategory(),
-					Image:    currentPackageImageHash,
+					Name:     pThin.GetName(),
+					Category: pThin.GetCategory(),
+					Version:  pThin.GetVersion(),
+					Path:     "",
+					Image: fmt.Sprintf("%s:%s", buildOpts.PushImageRepository,
+						candidates.Artifacts[idx].FinalImageHash),
 				})
 			}
 
-			y, err := yaml.Marshal(results)
-			if err != nil {
-				fmt.Printf("err: %v\n", err)
-				return
-			}
 			switch out {
 			case "yaml":
-				fmt.Println(string(y))
-			case "json":
-				j2, err := yaml.YAMLToJSON(y)
+				y, err := yaml.Marshal(results)
 				if err != nil {
 					fmt.Printf("err: %v\n", err)
 					return
 				}
-				fmt.Println(string(j2))
-			default:
-				for _, p := range results.Packages {
-					fmt.Println(fmt.Sprintf("%s/%s-%s: %s", p.Category, p.Name, p.Version, p.Image))
+				fmt.Println(string(y))
+			case "json":
+				y, err := json.Marshal(results)
+				if err != nil {
+					fmt.Printf("err: %v\n", err)
+					return
 				}
+				fmt.Println(string(y))
+			default:
+
+				InfoC(Bold(":whale2: List of images for package:"))
+				ndeps := len(results.Packages) - 2
+				for i := 0; i < ndeps; i++ {
+					p := results.Packages[i]
+					InfoC(fmt.Sprintf(":wrench: %s :right_arrow: %s/%s-%s",
+						p.Image,
+						p.Category, p.Name, p.Version,
+					))
+				}
+				ndeps++
+				InfoC(fmt.Sprintf(":package: %s :right_arrow: %s",
+					Bold(results.Packages[ndeps].Image),
+					Bold(fmt.Sprintf("%s/%s-%s",
+						results.Packages[ndeps].Category, results.Packages[ndeps].Name,
+						results.Packages[ndeps].Version,
+					)),
+				))
 			}
 		},
 	}
@@ -145,10 +165,13 @@ func NewTreeImageCommand() *cobra.Command {
 	if err != nil {
 		Fatal(err)
 	}
+	ans.Flags().String("backend", "dockerv3", "backend used (docker)")
 	ans.Flags().StringP("output", "o", "terminal", "Output format ( Defaults: terminal, available: json,yaml )")
 	ans.Flags().StringArrayP("tree", "t", []string{path}, "Path of the tree to use.")
 	ans.Flags().String("image-repository", "anise/cache", "Default base image string for generated image")
 	ans.Flags().StringArrayP("pull-repository", "p", []string{}, "A list of repositories to pull the cache from")
+	ans.Flags().StringSlice("templates-dir", []string{filepath.Join(path, "templates")},
+		"Path of the render templates to use.")
 
 	return ans
 }

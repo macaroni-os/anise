@@ -11,11 +11,11 @@ import (
 	"time"
 
 	helpers "github.com/macaroni-os/anise/cmd/helpers"
-	"github.com/macaroni-os/anise/pkg/compiler/types/artifact"
-	"github.com/macaroni-os/anise/pkg/compiler/types/compression"
-	compilerspec "github.com/macaroni-os/anise/pkg/compiler/types/spec"
 	cfg "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
+	"github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
+	"github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
+	compilerspec "github.com/macaroni-os/anise/pkg/v2/compiler/types/specs"
 
 	"github.com/spf13/cobra"
 )
@@ -59,7 +59,7 @@ func newPackCommand(config *cfg.AniseConfig) *cobra.Command {
 				Fatal("Invalid package string ", packageName, ": ", err.Error())
 			}
 
-			spec := &compilerspec.AniseCompilationSpec{Package: p}
+			spec := &compilerspec.CompilationSpec{Package: p}
 			a := artifact.NewPackageArtifact(filepath.Join(dst, p.GetFingerPrint()+".package.tar"))
 			a.CompressionType = compression.Implementation(compressionType)
 			err = a.Compress(sourcePath, concurrency)
