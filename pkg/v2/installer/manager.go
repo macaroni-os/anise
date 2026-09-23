@@ -20,11 +20,14 @@ import (
 	fileHelper "github.com/macaroni-os/anise/pkg/helpers/file"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
-	"github.com/macaroni-os/anise/pkg/tree"
 	artifact "github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
 	repos "github.com/macaroni-os/anise/pkg/v2/repository"
 
 	"github.com/pkg/errors"
+)
+
+const (
+	FinalizerFile = "finalize.yaml"
 )
 
 type ArtifactsManager struct {
@@ -431,7 +434,7 @@ func (m *ArtifactsManager) RegisterPackage(p *artifact.PackageArtifact, r *repos
 
 		repoTreefs := r.GetTreePath(m.Config.GetSystem().GetSystemReposDirPath())
 		pkgdir := p.GetPackageTreePath(repoTreefs)
-		finalizeFile := filepath.Join(pkgdir, tree.FinalizerFile)
+		finalizeFile := filepath.Join(pkgdir, FinalizerFile)
 		defFile := filepath.Join(pkgdir, pkg.PackageDefinitionFile)
 
 		if fileHelper.Exists(finalizeFile) {
@@ -602,7 +605,7 @@ func (m *ArtifactsManager) ExecuteFinalizer(
 
 	repoTreefs := r.GetTreePath(m.Config.GetSystem().GetSystemReposDirPath())
 	pkgdir := a.GetPackageTreePath(repoTreefs)
-	finalizeFile := filepath.Join(pkgdir, tree.FinalizerFile)
+	finalizeFile := filepath.Join(pkgdir, FinalizerFile)
 	defFile := filepath.Join(pkgdir, pkg.PackageDefinitionFile)
 
 	if a.Runtime == nil && a.CompileSpec.Package == nil {
