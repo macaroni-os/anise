@@ -18,11 +18,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"sync"
 
-	backend "github.com/macaroni-os/anise/pkg/compiler/backend"
 	. "github.com/macaroni-os/anise/pkg/config"
 	"github.com/macaroni-os/anise/pkg/helpers"
 	fileHelper "github.com/macaroni-os/anise/pkg/helpers/file"
@@ -416,12 +413,6 @@ func (a *PackageArtifact) GetFileName() string {
 	return path.Base(a.Path)
 }
 
-func (a *PackageArtifact) genDockerfile() string {
-	return `
-FROM scratch
-COPY . /`
-}
-
 // CreateArtifactForFile creates a new artifact from the given file
 func CreateArtifactForFile(s string, opts ...func(*PackageArtifact)) (*PackageArtifact, error) {
 	if _, err := os.Stat(s); os.IsNotExist(err) {
@@ -449,56 +440,6 @@ func CreateArtifactForFile(s string, opts ...func(*PackageArtifact)) (*PackageAr
 	}
 
 	return a, a.Compress(archive, 1)
-}
-
-type ImageBuilder interface {
-	BuildImage(backend.Options) error
-}
-
-// GenerateFinalImage takes an artifact and builds a Docker image with its content
-func (a *PackageArtifact) GenerateFinalImage(imageName string, b ImageBuilder, keepPerms bool) (backend.Options, error) {
-	builderOpts := backend.Options{}
-	archive, err := AniseCfg.GetSystem().TempDir("archive")
-	if err != nil {
-		return builderOpts, errors.Wrap(err, "error met while creating tempdir for "+a.Path)
-	}
-	defer os.RemoveAll(archive) // clean up
-
-	uncompressedFiles := filepath.Join(archive, "files")
-	dockerFile := filepath.Join(archive, "Dockerfile")
-
-	if err := os.MkdirAll(uncompressedFiles, os.ModePerm); err != nil {
-		return builderOpts, errors.Wrap(err, "error met while creating tempdir for "+a.Path)
-	}
-
-	if err := a.Unpack(uncompressedFiles, true); err != nil {
-		return builderOpts, errors.Wrap(err, "error met while uncompressing artifact "+a.Path)
-	}
-
-	empty, err := fileHelper.DirectoryIsEmpty(uncompressedFiles)
-	if err != nil {
-		return builderOpts, errors.Wrap(err, "error met while checking if directory is empty "+uncompressedFiles)
-	}
-
-	// See https://github.com/moby/moby/issues/38039.
-	// We can't generate FROM scratch empty images. Docker will refuse to export them
-	// workaround: Inject a .virtual empty file
-	if empty {
-		fileHelper.Touch(filepath.Join(uncompressedFiles, ".virtual"))
-	}
-
-	data := a.genDockerfile()
-	if err := ioutil.WriteFile(dockerFile, []byte(data), 0644); err != nil {
-		return builderOpts, errors.Wrap(err, "error met while rendering artifact dockerfile "+a.Path)
-	}
-
-	builderOpts = backend.Options{
-		ImageName:      imageName,
-		SourcePath:     archive,
-		DockerFileName: dockerFile,
-		Context:        uncompressedFiles,
-	}
-	return builderOpts, b.BuildImage(builderOpts)
 }
 
 // Compress is responsible to archive and compress to the artifact Path.
@@ -882,183 +823,4 @@ func (a *PackageArtifact) FileList() ([]string, error) {
 		// if a dir, create it, then go to next segment
 	}
 	return files, nil
-}
-
-type CopyJob struct {
-	Src, Dst string
-	Artifact string
-}
-
-func worker(i int, wg *sync.WaitGroup, s <-chan CopyJob) {
-	defer wg.Done()
-
-	for job := range s {
-		_, err := os.Lstat(job.Dst)
-		if err != nil {
-			Debug("Copying ", job.Src)
-			if err := fileHelper.DeepCopyFile(job.Src, job.Dst); err != nil {
-				Warning("Error copying", job, err)
-			}
-		}
-	}
-}
-
-func compileRegexes(regexes []string) []*regexp.Regexp {
-	var result []*regexp.Regexp
-	for _, i := range regexes {
-		r, e := regexp.Compile(i)
-		if e != nil {
-			Warning("Failed compiling regex:", e)
-			continue
-		}
-		result = append(result, r)
-	}
-	return result
-}
-
-type ArtifactNode struct {
-	Name string `json:"Name"`
-	Size int    `json:"Size"`
-}
-type ArtifactDiffs struct {
-	Additions []ArtifactNode `json:"Adds"`
-	Deletions []ArtifactNode `json:"Dels"`
-	Changes   []ArtifactNode `json:"Mods"`
-}
-
-type ArtifactLayer struct {
-	FromImage string        `json:"Image1"`
-	ToImage   string        `json:"Image2"`
-	Diffs     ArtifactDiffs `json:"Diff"`
-}
-
-// ExtractArtifactFromDelta extracts deltas from ArtifactLayer from an image in tar format
-func ExtractArtifactFromDelta(src, dst string, layers []ArtifactLayer, concurrency int, keepPerms bool, includes []string, excludes []string, t compression.Implementation) (*PackageArtifact, error) {
-
-	archive, err := AniseCfg.GetSystem().TempDir("archive")
-	if err != nil {
-		return nil, errors.Wrap(err, "Error met while creating tempdir for archive")
-	}
-	defer os.RemoveAll(archive) // clean up
-
-	if strings.HasSuffix(src, ".tar") {
-		rootfs, err := AniseCfg.GetSystem().TempDir("rootfs")
-		if err != nil {
-			return nil, errors.Wrap(err, "Error met while creating tempdir for rootfs")
-		}
-		defer os.RemoveAll(rootfs) // clean up
-		err = helpers.Untar(src, rootfs, keepPerms, AniseCfg.GetGeneral().OverwriteDirPerms)
-		if err != nil {
-			return nil, errors.Wrap(err, "Error met while unpacking rootfs")
-		}
-		src = rootfs
-	}
-
-	toCopy := make(chan CopyJob)
-
-	var wg = new(sync.WaitGroup)
-	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-		go worker(i, wg, toCopy)
-	}
-
-	// Handle includes in spec. If specified they filter what gets in the package
-
-	if len(includes) > 0 && len(excludes) == 0 {
-		includeRegexp := compileRegexes(includes)
-		for _, l := range layers {
-			// Consider d.Additions (and d.Changes? - warn at least) only
-		ADDS:
-			for _, a := range l.Diffs.Additions {
-				for _, i := range includeRegexp {
-					if i.MatchString(a.Name) {
-						toCopy <- CopyJob{Src: filepath.Join(src, a.Name), Dst: filepath.Join(archive, a.Name), Artifact: a.Name}
-						continue ADDS
-					}
-				}
-			}
-			for _, a := range l.Diffs.Changes {
-				Debug("File ", a.Name, " changed")
-			}
-			for _, a := range l.Diffs.Deletions {
-				Debug("File ", a.Name, " deleted")
-			}
-		}
-
-	} else if len(includes) == 0 && len(excludes) != 0 {
-		excludeRegexp := compileRegexes(excludes)
-		for _, l := range layers {
-			// Consider d.Additions (and d.Changes? - warn at least) only
-		ADD:
-			for _, a := range l.Diffs.Additions {
-				for _, i := range excludeRegexp {
-					if i.MatchString(a.Name) {
-						continue ADD
-					}
-				}
-				toCopy <- CopyJob{Src: filepath.Join(src, a.Name), Dst: filepath.Join(archive, a.Name), Artifact: a.Name}
-			}
-			for _, a := range l.Diffs.Changes {
-				Debug("File ", a.Name, " changed")
-			}
-			for _, a := range l.Diffs.Deletions {
-				Debug("File ", a.Name, " deleted")
-			}
-		}
-
-	} else if len(includes) != 0 && len(excludes) != 0 {
-		includeRegexp := compileRegexes(includes)
-		excludeRegexp := compileRegexes(excludes)
-
-		for _, l := range layers {
-			// Consider d.Additions (and d.Changes? - warn at least) only
-		EXCLUDES:
-			for _, a := range l.Diffs.Additions {
-				for _, i := range includeRegexp {
-					if i.MatchString(a.Name) {
-						for _, e := range excludeRegexp {
-							if e.MatchString(a.Name) {
-								continue EXCLUDES
-							}
-						}
-						toCopy <- CopyJob{Src: filepath.Join(src, a.Name), Dst: filepath.Join(archive, a.Name), Artifact: a.Name}
-						continue EXCLUDES
-					}
-				}
-			}
-			for _, a := range l.Diffs.Changes {
-				Debug("File ", a.Name, " changed")
-			}
-			for _, a := range l.Diffs.Deletions {
-				Debug("File ", a.Name, " deleted")
-			}
-		}
-
-	} else {
-		// Otherwise just grab all
-		for _, l := range layers {
-			// Consider d.Additions (and d.Changes? - warn at least) only
-			for _, a := range l.Diffs.Additions {
-				Debug("File ", a.Name, " added")
-				toCopy <- CopyJob{Src: filepath.Join(src, a.Name), Dst: filepath.Join(archive, a.Name), Artifact: a.Name}
-			}
-			for _, a := range l.Diffs.Changes {
-				Debug("File ", a.Name, " changed")
-			}
-			for _, a := range l.Diffs.Deletions {
-				Debug("File ", a.Name, " deleted")
-			}
-		}
-	}
-
-	close(toCopy)
-	wg.Wait()
-
-	a := NewPackageArtifact(dst)
-	a.CompressionType = t
-	err = a.Compress(archive, concurrency)
-	if err != nil {
-		return nil, errors.Wrap(err, "Error met while creating package archive")
-	}
-	return a, nil
 }
