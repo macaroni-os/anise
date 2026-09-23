@@ -44,7 +44,7 @@ func NewDockerv3Backend(c *cfg.AniseConfig) BackendCompiler {
 	}
 }
 
-func (d *Dockerv3) generateBuildImageHash(art *artifact.PackageArtifact,
+func (d *Dockerv3) GenerateBuildImageHash(art *artifact.PackageArtifact,
 	pthin *pkg.PackageThin, opts *options.Compiler) error {
 	var psha hash.Hash = sha256.New()
 
@@ -78,7 +78,7 @@ func (d *Dockerv3) generateBuildImageHash(art *artifact.PackageArtifact,
 	return nil
 }
 
-func (d *Dockerv3) generateFinalImageHash(art *artifact.PackageArtifact,
+func (d *Dockerv3) GenerateFinalImageHash(art *artifact.PackageArtifact,
 	pthin *pkg.PackageThin, opts *options.Compiler) error {
 
 	// NOTE: I generate the hashing inside the docker backend
@@ -283,7 +283,7 @@ func (d *Dockerv3) CreateBuildImage(art *artifact.PackageArtifact,
 		return err
 	}
 
-	err = d.generateBuildImageHash(art, pThin, opts)
+	err = d.GenerateBuildImageHash(art, pThin, opts)
 	if err != nil {
 		return err
 	}
@@ -460,7 +460,7 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		return err
 	}
 
-	err = d.generateFinalImageHash(art, pThin, opts)
+	err = d.GenerateFinalImageHash(art, pThin, opts)
 	if err != nil {
 		return err
 	}
