@@ -15,13 +15,15 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/geaaru/pkgs-checker/pkg/gentoo"
 	helpers "github.com/macaroni-os/anise/anise-build/cmd/helpers"
+	"github.com/macaroni-os/anise/anise-build/pkg/v2/solver"
 	. "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
+	"github.com/macaroni-os/anise/pkg/v2/render"
 	tree "github.com/macaroni-os/anise/pkg/v2/tree"
 
+	"github.com/geaaru/pkgs-checker/pkg/gentoo"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/semaphore"
 )
@@ -39,6 +41,8 @@ type ValidateTask struct {
 }
 
 type ValidateOpts struct {
+	Config *AniseConfig
+
 	WithSolver    bool
 	OnlyRuntime   bool
 	OnlyBuildtime bool
@@ -46,8 +50,10 @@ type ValidateOpts struct {
 	RegMatches    []*regexp.Regexp
 	Excludes      []string
 	Matches       []string
+	RenderValues  []string
 
-	ForestGuard *tree.ForestGuard
+	ForestGuard  *tree.ForestGuard
+	renderEngine *render.RenderEngine
 
 	Mutex      sync.Mutex
 	BrokenPkgs int
@@ -79,6 +85,210 @@ func (o *ValidateOpts) AddError(err error) {
 	o.Mutex.Lock()
 	defer o.Mutex.Unlock()
 	o.Errors = append(o.Errors, err)
+}
+
+func validateBuildtime(task *ValidateTask, opts *ValidateOpts,
+	pruntime *pkg.DefaultPackage) (bool, error) {
+
+	var lastError error
+
+	buildOpts := solver.NewBuildSolverOpts()
+	s := solver.NewBuildSolver(opts.Config, buildOpts)
+
+	// Setup the forest guard for the solver
+	s.SetForestGuard(opts.ForestGuard)
+	s.SetRenderEngine(opts.renderEngine)
+
+	if opts.WithSolver {
+		// Directly use the ResolvePackage to check solver and dependencies.
+
+		_, err := s.ResolvePackage(pruntime)
+		if err != nil {
+			return false, err
+		}
+
+	} else {
+
+		cs, _, err := s.LoadCompilationSpec(
+			task.TreeIdx, task.TreeIdxPkg, pruntime)
+		if err != nil {
+			return false, err
+		}
+
+		if cs.DefaultPackage != nil && len(cs.DefaultPackage.GetRequires()) > 0 {
+			for _, dep := range cs.DefaultPackage.GetRequires() {
+
+				depOk := false
+				trees, _ := opts.ForestGuard.SearchPackage(dep)
+
+				for _, ti := range trees {
+					versions, _ := ti.GetPackageVersions(dep.PackageName())
+
+					for _, ver := range versions {
+						pkg2check := &pkg.DefaultPackage{
+							Name:     pruntime.Name,
+							Category: pruntime.Category,
+							Version:  ver.Version,
+						}
+
+						valid, err := pruntime.Admit(pkg2check)
+						if err != nil {
+							lastError = err
+							break
+						}
+						if valid {
+							depOk = true
+							// POST: This version could be used from the package.
+							break
+						}
+
+					}
+
+					if depOk {
+						break
+					}
+				}
+
+				if !depOk {
+
+					opts.IncrBrokenDeps()
+
+					lastError = fmt.Errorf(
+						"[buildtime] [%s] Dependency %s not found :fire:.",
+						pruntime.HumanReadableString(),
+						dep.HumanReadableString())
+
+				} else {
+
+					DebugC(fmt.Errorf(
+						"[buildtime] [%s] Dependency %s :heavy_check_mark:",
+						pruntime.HumanReadableString(),
+						dep.HumanReadableString()))
+				}
+
+			}
+
+		}
+
+	}
+
+	if lastError != nil {
+		return false, lastError
+	}
+	return true, nil
+}
+
+func validateRuntime(task *ValidateTask, opts *ValidateOpts,
+	pruntime *pkg.DefaultPackage) (bool, error) {
+
+	var lastError error
+
+	// Check if all runtime dependencies are present in the tree
+	numRuntimeDeps := len(pruntime.GetRequires())
+
+	if numRuntimeDeps > 0 {
+
+		for _, dep := range pruntime.GetRequires() {
+
+			depOk := false
+			trees, _ := opts.ForestGuard.SearchPackage(dep)
+
+			for _, ti := range trees {
+				versions, _ := ti.GetPackageVersions(dep.PackageName())
+
+				for _, ver := range versions {
+					pkg2check := &pkg.DefaultPackage{
+						Name:     pruntime.Name,
+						Category: pruntime.Category,
+						Version:  ver.Version,
+					}
+
+					valid, err := pruntime.Admit(pkg2check)
+					if err != nil {
+						lastError = err
+						break
+					}
+					if valid {
+						depOk = true
+						// POST: This version could be used from the package.
+						break
+					}
+
+				}
+
+				if depOk {
+					break
+				}
+			}
+
+			if !depOk {
+				// Check if the dependency is a provides
+				provides, _ := opts.ForestGuard.SearchProvides(dep)
+
+				for _, ti := range provides {
+					provs, _ := ti.GetPackageProvides(dep.PackageName())
+
+					for _, ver := range provs {
+
+						gprov, _ := gentoo.ParsePackageStr(
+							fmt.Sprintf("%s-%s", ver.PkgName, ver.PkgVersion))
+
+						depWithProvides := &pkg.DefaultPackage{
+							Name:     gprov.GetPN(),
+							Category: gprov.Category,
+							Version:  ver.PkgVersion,
+						}
+
+						trees, _ := opts.ForestGuard.SearchPackage(depWithProvides)
+
+						if len(trees) == 0 {
+							continue
+						}
+
+						valid, err := pruntime.Admit(depWithProvides)
+						if err != nil {
+							lastError = err
+							break
+						}
+						if valid {
+							depOk = true
+							// POST: This version could be used from the package.
+							break
+						}
+
+					}
+
+					if depOk {
+						break
+					}
+				}
+			}
+
+			if !depOk {
+
+				opts.IncrBrokenDeps()
+
+				lastError = fmt.Errorf(
+					"[runtime] [%s] Dependency %s not found :fire:.",
+					pruntime.HumanReadableString(),
+					dep.HumanReadableString())
+
+			} else {
+
+				DebugC(fmt.Errorf(
+					"[runtime] [%s] Dependency %s :heavy_check_mark:",
+					pruntime.HumanReadableString(),
+					dep.HumanReadableString()))
+			}
+
+		}
+
+	}
+
+	if lastError != nil {
+		return false, lastError
+	}
+	return true, nil
 }
 
 func validatePackage(task *ValidateTask, opts *ValidateOpts,
@@ -190,118 +400,39 @@ func validatePackage(task *ValidateTask, opts *ValidateOpts,
 
 	}
 
-	// Check if all runtime dependencies are present in the tree
-	numRuntimeDeps := len(pruntime.GetRequires())
+	if !opts.OnlyBuildtime {
+		_, lastError = validateRuntime(
+			task, opts, pruntime)
 
-	if numRuntimeDeps > 0 {
-
-		for _, dep := range pruntime.GetRequires() {
-
-			depOk := false
-			trees, _ := opts.ForestGuard.SearchPackage(dep)
-
-			for _, ti := range trees {
-				versions, _ := ti.GetPackageVersions(dep.PackageName())
-
-				for _, ver := range versions {
-					pkg2check := &pkg.DefaultPackage{
-						Name:     pruntime.Name,
-						Category: pruntime.Category,
-						Version:  ver.Version,
-					}
-
-					valid, err := pruntime.Admit(pkg2check)
-					if err != nil {
-						lastError = err
-						break
-					}
-					if valid {
-						depOk = true
-						// POST: This version could be used from the package.
-						break
-					}
-
-				}
-
-				if depOk {
-					break
-				}
+		if lastError != nil {
+			opts.IncrBrokenPkgs()
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+				Error:      lastError,
 			}
-
-			if !depOk {
-				// Check if the dependency is a provides
-				provides, _ := opts.ForestGuard.SearchProvides(dep)
-
-				for _, ti := range provides {
-					provs, _ := ti.GetPackageProvides(dep.PackageName())
-
-					for _, ver := range provs {
-
-						gprov, _ := gentoo.ParsePackageStr(
-							fmt.Sprintf("%s-%s", ver.PkgName, ver.PkgVersion))
-
-						depWithProvides := &pkg.DefaultPackage{
-							Name:     gprov.GetPN(),
-							Category: gprov.Category,
-							Version:  ver.PkgVersion,
-						}
-
-						trees, _ := opts.ForestGuard.SearchPackage(depWithProvides)
-
-						if len(trees) == 0 {
-							continue
-						}
-
-						valid, err := pruntime.Admit(depWithProvides)
-						if err != nil {
-							lastError = err
-							break
-						}
-						if valid {
-							depOk = true
-							// POST: This version could be used from the package.
-							break
-						}
-
-					}
-
-					if depOk {
-						break
-					}
-				}
-			}
-
-			if !depOk {
-
-				opts.IncrBrokenDeps()
-
-				lastError = fmt.Errorf(
-					"[runtime] [%s] Dependency %s not found :fire:.",
-					pruntime.HumanReadableString(),
-					dep.HumanReadableString())
-
-			} else {
-
-				DebugC(fmt.Errorf(
-					"[runtime] [%s] Dependency %s :heavy_check_mark:",
-					pruntime.HumanReadableString(),
-					dep.HumanReadableString()))
-			}
-
+			return
 		}
-
 	}
 
-	if lastError != nil {
-		opts.IncrBrokenPkgs()
-		task.semaphore.Release(1)
-		ch <- ValidateTask{
-			Pn:         task.Pn,
-			TreeIdx:    task.TreeIdx,
-			TreeIdxPkg: task.TreeIdxPkg,
-			Error:      lastError,
+	if !opts.OnlyRuntime {
+
+		validpkg, lastError = validateBuildtime(
+			task, opts, pruntime)
+
+		if lastError != nil {
+			opts.IncrBrokenPkgs()
+			task.semaphore.Release(1)
+			ch <- ValidateTask{
+				Pn:         task.Pn,
+				TreeIdx:    task.TreeIdx,
+				TreeIdxPkg: task.TreeIdxPkg,
+				Error:      lastError,
+			}
+			return
 		}
-		return
 	}
 
 	task.semaphore.Release(1)
@@ -323,7 +454,7 @@ func validatePackage(task *ValidateTask, opts *ValidateOpts,
 }
 
 func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtime,
-	withSolver bool, treePaths []string) {
+	withSolver bool, treePaths, templatesDirs []string) {
 
 	var err error
 
@@ -332,6 +463,7 @@ func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtim
 	opts.WithSolver = withSolver
 	opts.BrokenPkgs = 0
 	opts.BrokenDeps = 0
+	opts.Config = config
 
 	// Load the index file
 	opts.ForestGuard = tree.NewForestGuard(config)
@@ -367,6 +499,19 @@ func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtim
 		Fatal(err.Error())
 	}
 
+	// Creating render engine for build
+	rEngine := render.NewRenderEngine(config)
+	err = rEngine.LoadTemplates(templatesDirs)
+	if err != nil {
+		Fatal(fmt.Sprintf("fail to load render templates dirs: %s", err.Error()))
+	}
+
+	err = rEngine.LoadDefaultValues(opts.RenderValues)
+	if err != nil {
+		Fatal(fmt.Sprintf("fail to load render default values: %s", err.Error()))
+	}
+
+	opts.renderEngine = rEngine
 }
 
 func NewTreeValidateCommand(config *AniseConfig) *cobra.Command {
@@ -395,10 +540,14 @@ func NewTreeValidateCommand(config *AniseConfig) *cobra.Command {
 			withSolver, _ := cmd.Flags().GetBool("with-solver")
 			onlyRuntime, _ := cmd.Flags().GetBool("only-runtime")
 			onlyBuildtime, _ := cmd.Flags().GetBool("only-buildtime")
+			templatesDirs := config.Viper.GetStringSlice("templates-dir")
+			values := helpers.ValuesFlags()
 
 			opts.Excludes = excludes
 			opts.Matches = matches
-			initOpts(config, &opts, onlyRuntime, onlyBuildtime, withSolver, treePaths)
+			opts.RenderValues = values
+			initOpts(config, &opts, onlyRuntime, onlyBuildtime, withSolver, treePaths,
+				templatesDirs)
 
 			channels := []chan ValidateTask{}
 
@@ -471,13 +620,17 @@ func NewTreeValidateCommand(config *AniseConfig) *cobra.Command {
 	ans.Flags().Bool("only-runtime", false, "Check only runtime dependencies.")
 	ans.Flags().Bool("only-buildtime", false, "Check only buildtime dependencies.")
 	ans.Flags().BoolP("with-solver", "s", false,
-		"Enable check of requires also with solver.")
+		"Enable check of requires also with solver. Only for buildtime.")
 	ans.Flags().StringSliceVarP(&treePaths, "tree", "t", []string{path},
 		"Path of the tree to use.")
 	ans.Flags().StringSliceVarP(&excludes, "exclude", "e", []string{},
 		"Exclude matched packages from analysis. (Use string as regex).")
 	ans.Flags().StringSliceVarP(&matches, "matches", "m", []string{},
 		"Analyze only matched packages. (Use string as regex).")
+	ans.Flags().StringSlice("values", []string{},
+		"Build values file to interpolate with each package")
+	ans.Flags().StringSlice("templates-dir", []string{filepath.Join(path, "templates")},
+		"Path of the render templates to use.")
 
 	return ans
 }

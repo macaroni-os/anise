@@ -143,7 +143,7 @@ func (s *BuildSolver) ResolvePackage(p *pkg.DefaultPackage) (*artifact.Artifacts
 	return ans, nil
 }
 
-func (s *BuildSolver) loadCompilationSpec(
+func (s *BuildSolver) LoadCompilationSpec(
 	t *tree.TreeIdx, vtree *tree.TreeIdxPkg, p *pkg.DefaultPackage) (*specs.CompilationSpecLoad, string, error) {
 
 	var cs *specs.CompilationSpecLoad
@@ -206,7 +206,7 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 
 	stack = append(stack, ptask.PackageSelector.PackageName())
 
-	cs, pkgPath, err := s.loadCompilationSpec(ptask.Tree, ptask.Version, ptask.PackageSelector)
+	cs, pkgPath, err := s.LoadCompilationSpec(ptask.Tree, ptask.Version, ptask.PackageSelector)
 	if err != nil {
 		return ans, err
 	}
@@ -385,7 +385,7 @@ func (s *BuildSolver) recursiveLoadDep(ptask *PackageTask,
 
 	stack = append(stack, selector.PackageName())
 
-	cs, pkgPath, err := s.loadCompilationSpec(t, vtree, selector)
+	cs, pkgPath, err := s.LoadCompilationSpec(t, vtree, selector)
 	if err != nil {
 		return ans, err
 	}
