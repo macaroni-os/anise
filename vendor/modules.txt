@@ -188,7 +188,7 @@ github.com/fxamacker/cbor/v2
 # github.com/geaaru/pkgs-checker v0.14.1
 ## explicit; go 1.21
 github.com/geaaru/pkgs-checker/pkg/gentoo
-# github.com/geaaru/tar-formers v0.10.3
+# github.com/geaaru/tar-formers v0.10.4
 ## explicit; go 1.26.0
 github.com/geaaru/tar-formers/pkg/executor
 github.com/geaaru/tar-formers/pkg/logger
@@ -316,7 +316,7 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/klauspost/compress v1.20.0
+# github.com/klauspost/compress v1.20.1
 ## explicit; go 1.25
 github.com/klauspost/compress
 github.com/klauspost/compress/flate

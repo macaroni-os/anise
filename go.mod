@@ -17,7 +17,7 @@ require (
 	github.com/docker/docker v25.0.6+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/geaaru/pkgs-checker v0.14.1
-	github.com/geaaru/tar-formers v0.10.3
+	github.com/geaaru/tar-formers v0.10.4
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-sql-driver/mysql v1.6.0 // indirect
 	github.com/gofrs/flock v0.13.0
@@ -28,7 +28,7 @@ require (
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/imdario/mergo v0.3.13
 	github.com/jinzhu/copier v0.0.0-20180308034124-7e38e58719c3
-	github.com/klauspost/compress v1.20.0
+	github.com/klauspost/compress v1.20.1
 	github.com/klauspost/pgzip v1.2.6
 	github.com/knqyf263/go-deb-version v0.0.0-20190517075300-09fca494f03d
 	github.com/kyokomi/emoji v2.2.4+incompatible

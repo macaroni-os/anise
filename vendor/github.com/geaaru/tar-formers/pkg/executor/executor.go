@@ -255,6 +255,10 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 					"File %s renamed in %s from reader callback.",
 					header.Name, name))
 			}
+		} else {
+			rename := t.Task.GetRename(name)
+			// Drop initial / for header name
+			name = rename[1:]
 		}
 
 		if t.Task.IsPath2Skip(name) {
