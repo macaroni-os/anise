@@ -27,7 +27,9 @@ import (
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/options"
 
 	tarf "github.com/geaaru/tar-formers/pkg/executor"
+	"github.com/geaaru/tar-formers/pkg/specs"
 	tarf_specs "github.com/geaaru/tar-formers/pkg/specs"
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 )
 
 type Dockerv3 struct {
@@ -506,7 +508,6 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 
 	if buildImage {
 
-		fmt.Println("FLAT ", art.CompileSpec.GetFlatImage())
 		finalImangeName := art.FinalImageHash
 
 		if art.CompileSpec.GetFlatImage() {
@@ -552,10 +553,6 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	remotetaggedImage := fmt.Sprintf("%s:%s", opts.PushImageRepository,
 		art.FinalImageHash)
 
-	if !strings.HasSuffix(extractdir, "/") {
-		extractdir = extractdir + "/"
-	}
-
 	// Create the container from specified image
 	createargs := []string{
 		"create", remotetaggedImage,
@@ -586,6 +583,15 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	spec.BrokenLinksFatal = true
 	spec.Summary = true
 
+	// spec writer
+	specWriter := tarf_specs.NewSpecFile()
+	specWriter.MapEntities = false
+	specWriter.SameChtimes = false
+	specWriter.SameOwner = d.Config.GetGeneral().SameOwner
+	specWriter.BrokenLinksFatal = true
+	specWriter.Summary = false
+	specWriter.Writer = specs.NewWriter()
+
 	if len(art.CompileSpec.Excludes) > 0 {
 		for i := range art.CompileSpec.Excludes {
 			spec.IgnoreRegexes = append(spec.IgnoreRegexes,
@@ -605,8 +611,8 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	if art.CompileSpec.PackageDir == "" {
 		args = []string{"export", idcontainer}
 
-		Debug(fmt.Sprintf(":whale: Extracts container files to %s...",
-			extractdir))
+		Debug(fmt.Sprintf(":whale: Extracts all container files to %s...",
+			filepath.Base(art.Path)))
 
 	} else {
 
@@ -625,8 +631,14 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 			replacePrefix = replacePrefix[0 : len(replacePrefix)-1]
 		}
 
-		Debug(fmt.Sprintf(":whale: Copy container file from %s to %s (replace string %s)...",
-			sourcePath, extractdir, replacePrefix))
+		// Drop first /
+		if replacePrefix[0:1] == "/" {
+			replacePrefix = replacePrefix[1:]
+		}
+
+		Debug(fmt.Sprintf(
+			":whale: Copy container file from %s (replace string %s) to %s...",
+			sourcePath, replacePrefix, art.Path))
 
 		args = []string{"cp", "-a", sourcePath, "-"}
 
@@ -657,10 +669,25 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 	if err != nil {
 		return fmt.Errorf("error on start docker cp command: %s", err.Error())
 	}
+	// Prepare the writer
+	topts := tarf_tools.NewTarCompressionOpts(true)
+	topts.Mode = art.CompressionType
+	defer topts.Close()
 
-	err = tarformers.RunTask(spec, extractdir)
+	err = tarf_tools.PrepareTarWriter(art.Path, topts)
 	if err != nil {
-		return fmt.Errorf("failed process container tarball: %s", err.Error())
+		return fmt.Errorf("Error on prepare writer: %s", err.Error())
+	}
+
+	if topts.CompressWriter != nil {
+		tarformers.SetWriter(topts.CompressWriter)
+	} else {
+		tarformers.SetWriter(topts.FileWriter)
+	}
+
+	err = tarformers.RunTaskBridge(spec, specWriter)
+	if err != nil {
+		return fmt.Errorf("failed process container tarball :" + err.Error())
 	}
 
 	err = dockerCmd.Wait()
@@ -705,6 +732,12 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 		return err
 	}
 
+	art.Path = filepath.Join(builddir, art.GetPackage().GetFingerPrint()+".package.tar")
+	art.CompressionType = opts.CompressionType
+	if art.CompressionType != tarf_tools.None {
+		art.Path += "." + string(art.CompressionType)
+	}
+
 	// Extract files from the tagged image.
 	err = d.ExportImage(art, opts, pkgExtractDir)
 	if err != nil {
@@ -715,13 +748,6 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 
 	if art.CompileSpec.GetPackageDir() != "" {
 		Info(":tophat: Packing from output dir", art.CompileSpec.GetPackageDir())
-	}
-
-	art.Path = filepath.Join(builddir, art.GetPackage().GetFingerPrint()+".package.tar")
-	art.CompressionType = opts.CompressionType
-
-	if err := art.Compress(pkgExtractDir, d.Config.GetGeneral().Concurrency); err != nil {
-		return fmt.Errorf("error met while creating package archive: %s", err.Error())
 	}
 
 	art.CompileSpec.GetPackage().SetBuildTimestamp(time.Now().String())
