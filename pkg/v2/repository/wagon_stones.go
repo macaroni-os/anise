@@ -233,6 +233,30 @@ func (s *Stone) ToPackage() *pkg.DefaultPackage {
 	ans.License = s.License
 	ans.Repository = s.Repository
 
+	if s.Provides != nil && len(s.Provides) > 0 {
+		ans.Provides = []*pkg.DefaultPackage{}
+
+		for idx := range s.Provides {
+			ans.Provides = append(ans.Provides, s.Provides[idx].ToPackage())
+		}
+	}
+
+	if s.Requires != nil && len(s.Requires) > 0 {
+		ans.PackageRequires = []*pkg.DefaultPackage{}
+
+		for idx := range s.Requires {
+			ans.PackageRequires = append(ans.PackageRequires, s.Requires[idx].ToPackage())
+		}
+	}
+
+	if s.Conflicts != nil && len(s.Conflicts) > 0 {
+		ans.PackageConflicts = []*pkg.DefaultPackage{}
+
+		for idx := range s.Conflicts {
+			ans.PackageConflicts = append(ans.PackageConflicts, s.Conflicts[idx].ToPackage())
+		}
+	}
+
 	return ans
 }
 
