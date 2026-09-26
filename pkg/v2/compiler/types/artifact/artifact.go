@@ -25,11 +25,11 @@ import (
 	fileHelper "github.com/macaroni-os/anise/pkg/helpers/file"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
-	compression "github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
 	compilerspec "github.com/macaroni-os/anise/pkg/v2/compiler/types/specs"
 
 	tarf "github.com/geaaru/tar-formers/pkg/executor"
 	tarf_specs "github.com/geaaru/tar-formers/pkg/specs"
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 	zstd "github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
 	"github.com/pkg/errors"
@@ -50,7 +50,7 @@ type PackageArtifact struct {
 	Dependencies    []*PackageArtifact            `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 	CompileSpec     *compilerspec.CompilationSpec `json:"compilespec,omitempty" yaml:"compilespec,omitempty"`
 	Checksums       Checksums                     `json:"checksums" yaml:"checksums"`
-	CompressionType compression.Implementation    `json:"compressiontype" yaml:"compressiontype"`
+	CompressionType tarf_tools.CompressionMode    `json:"compressiontype" yaml:"compressiontype"`
 	Files           []string                      `json:"files" yaml:"files"`
 
 	PackageCacheImage string              `json:"package_cacheimage,omitempty" yaml:"package_cacheimage,omitempty"`
@@ -182,7 +182,7 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 }
 
 func NewPackageArtifact(path string) *PackageArtifact {
-	return &PackageArtifact{Path: path, TreePath: path, Dependencies: []*PackageArtifact{}, Checksums: Checksums{}, CompressionType: compression.None}
+	return &PackageArtifact{Path: path, TreePath: path, Dependencies: []*PackageArtifact{}, Checksums: Checksums{}, CompressionType: tarf_tools.None}
 }
 
 func NewPackageArtifactFromYaml(data []byte) (*PackageArtifact, error) {
@@ -454,7 +454,7 @@ func (a *PackageArtifact) Compress(src string, concurrency int) error {
 	}
 	switch a.CompressionType {
 
-	case compression.Zstandard:
+	case tarf_tools.Zstd:
 		err := helpers.Tar(src, a.Path)
 		if err != nil {
 			return err
@@ -492,7 +492,7 @@ func (a *PackageArtifact) Compress(src string, concurrency int) error {
 
 		a.Path = zstdFile
 		return nil
-	case compression.GZip:
+	case tarf_tools.Gzip:
 		err := helpers.Tar(src, a.Path)
 		if err != nil {
 			return err
@@ -539,10 +539,10 @@ func (a *PackageArtifact) Compress(src string, concurrency int) error {
 
 func (a *PackageArtifact) getCompressedName() string {
 	switch a.CompressionType {
-	case compression.Zstandard:
+	case tarf_tools.Zstd:
 		return a.Path + ".zst"
 
-	case compression.GZip:
+	case tarf_tools.Gzip:
 		return a.Path + ".gz"
 	}
 	return a.Path
@@ -551,7 +551,7 @@ func (a *PackageArtifact) getCompressedName() string {
 // GetUncompressedName returns the artifact path without the extension suffix
 func (a *PackageArtifact) GetUncompressedName() string {
 	switch a.CompressionType {
-	case compression.Zstandard, compression.GZip:
+	case tarf_tools.Zstd, tarf_tools.Gzip:
 		return strings.TrimSuffix(a.Path, filepath.Ext(a.Path))
 	}
 	return a.Path
@@ -690,7 +690,7 @@ func (a *PackageArtifact) Unpack(dst string, enableSubsets bool) error {
 	spec := a.GetTarFormersSpec(enableSubsets)
 
 	switch a.CompressionType {
-	case compression.Zstandard:
+	case tarf_tools.Zstd:
 		original, err := os.Open(a.CachePath)
 		if err != nil {
 			return errors.Wrap(err, "Cannot open "+a.CachePath)
@@ -707,7 +707,7 @@ func (a *PackageArtifact) Unpack(dst string, enableSubsets bool) error {
 		err = helpers.UntarProtectSpecCompress(dst,
 			protectedFiles, tarModifierWrapperFunc, spec, d)
 		return err
-	case compression.GZip:
+	case tarf_tools.Gzip:
 		// Create the uncompressed archive
 		original, err := os.Open(a.CachePath)
 		if err != nil {
@@ -747,7 +747,7 @@ func (a *PackageArtifact) FileList() ([]string, error) {
 	defer cleandir()
 
 	switch a.CompressionType {
-	case compression.Zstandard:
+	case tarf_tools.Zstd:
 		archive, err := os.Create(filepath.Join(archiveDir,
 			filepath.Base(a.CachePath)+".uncompressed"))
 		if err != nil {
@@ -768,7 +768,7 @@ func (a *PackageArtifact) FileList() ([]string, error) {
 		}
 		defer r.Close()
 		tr = tar.NewReader(r)
-	case compression.GZip:
+	case tarf_tools.Gzip:
 		// Create the uncompressed archive
 		archive, err := os.Create(filepath.Join(archiveDir,
 			filepath.Base(a.CachePath)+".uncompressed"))

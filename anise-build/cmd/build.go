@@ -15,7 +15,6 @@ import (
 	cfg "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
-	"github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/options"
 
 	"github.com/logrusorgru/aurora"
@@ -146,7 +145,7 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 					options.KeepImg(keepImages),
 					options.Privileged(privileged),
 					options.Concurrency(concurrency),
-					options.WithCompressionType(compression.Implementation(compressionType)),
+					options.WithCompressionType(compressionType),
 					options.OnlyTarget(onlyTarget),
 					options.Rebuild(rebuild),
 					options.BackendArgs(backendArgs),

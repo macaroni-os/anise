@@ -6,13 +6,14 @@ package repository
 
 import (
 	artifact "github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
-	compression "github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
+
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 )
 
 func NewWagonDocument(f string) *WagonDocument {
 	return &WagonDocument{
 		FileName:        f,
-		CompressionType: compression.None,
+		CompressionType: tarf_tools.None,
 		Checksums:       make(map[string]string, 0),
 	}
 }
@@ -34,14 +35,14 @@ func (f *WagonDocument) GetFileName() string {
 // SetCompressionType sets the compression type of the repository file.
 // Each repository can ship arbitrary file that will be downloaded by the client
 // in case of need, this sets the compression type that the client will use to uncompress the artifact
-func (f *WagonDocument) SetCompressionType(c compression.Implementation) {
+func (f *WagonDocument) SetCompressionType(c tarf_tools.CompressionMode) {
 	f.CompressionType = c
 }
 
 // GetCompressionType gets the compression type of the repository file.
 // Each repository can ship arbitrary file that will be downloaded by the client
 // in case of need, this gets the compression type that the client will use to uncompress the artifact
-func (f *WagonDocument) GetCompressionType() compression.Implementation {
+func (f *WagonDocument) GetCompressionType() tarf_tools.CompressionMode {
 	return f.CompressionType
 }
 

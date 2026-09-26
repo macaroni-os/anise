@@ -11,9 +11,9 @@ import (
 	"github.com/macaroni-os/anise/anise-build/pkg/v2/repository"
 	helpers "github.com/macaroni-os/anise/cmd/helpers"
 	cfg "github.com/macaroni-os/anise/pkg/config"
-	"github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
 	wagon "github.com/macaroni-os/anise/pkg/v2/repository"
 
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -91,7 +91,7 @@ func newCreateRepoCommand(config *cfg.AniseConfig) *cobra.Command {
 			opts.ResetRevision = reset
 			opts.OutputDir = dst
 			opts.PackagesDir = config.Viper.GetString("packages")
-			opts.CompressionMode = compression.NewCompression(treetype)
+			opts.CompressionMode = tarf_tools.ParseCompressionMode(treetype)
 			opts.CheckPackageTarball = checkPackageTarball
 			opts.WithCompilerTree = withCompilerTree
 			if treeName != "" {

@@ -14,9 +14,9 @@ import (
 	cfg "github.com/macaroni-os/anise/pkg/config"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
-	"github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
 	compilerspec "github.com/macaroni-os/anise/pkg/v2/compiler/types/specs"
 
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -61,7 +61,7 @@ func newPackCommand(config *cfg.AniseConfig) *cobra.Command {
 
 			spec := &compilerspec.CompilationSpec{Package: p}
 			a := artifact.NewPackageArtifact(filepath.Join(dst, p.GetFingerPrint()+".package.tar"))
-			a.CompressionType = compression.Implementation(compressionType)
+			a.CompressionType = tarf_tools.ParseCompressionMode(compressionType)
 			err = a.Compress(sourcePath, concurrency)
 			if err != nil {
 				Fatal("failed compressing ", packageName, ": ", err.Error())

@@ -21,7 +21,6 @@ import (
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
 	artifact "github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
-	"github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
 	wagon "github.com/macaroni-os/anise/pkg/v2/repository"
 	"github.com/macaroni-os/anise/pkg/v2/tree"
 
@@ -46,7 +45,7 @@ type WagonFactoryOpts struct {
 	WithCompilerTree bool
 
 	// Using same compression for all files
-	CompressionMode compression.Implementation
+	CompressionMode tools.CompressionMode
 
 	// Docker Repository is not yet supported
 	// I trace options for that backend for now
@@ -70,7 +69,7 @@ func NewWagonFactoryOpts() *WagonFactoryOpts {
 		PackagesDir:         "",
 		CheckPackageTarball: false,
 		WithCompilerTree:    false,
-		CompressionMode:     compression.Zstandard,
+		CompressionMode:     tools.Zstd,
 		TreeFilename:        wagon.TREE_TARBALL,
 	}
 }
@@ -112,11 +111,10 @@ func (w *WagonFactory) createPackage(f string, idx *[]*tree.TreeIdx,
 		// We need to support the change of the compression with
 		// multiple compression at the same time.
 		// Check the zst extension by first case.
-		packageFilename = packageFilenamePrefix + compression.Zstandard.Ext()
+		packageFilename = packageFilenamePrefix + string(tools.Zstd)
 
 		if !fileHelper.Exists(packageFilename) {
-			packageFilename = packageFilenamePrefix +
-				compression.GZip.Ext()
+			packageFilename = packageFilenamePrefix + string(tools.Gzip)
 
 			if !fileHelper.Exists(packageFilename) {
 
@@ -333,7 +331,7 @@ func (w *WagonFactory) createCompilerTreeTarball(opts *WagonFactoryOpts,
 	if err != nil {
 		return nil, err
 	}
-	document.SetCompressionType(compression.Zstandard)
+	document.SetCompressionType(tools.Zstd)
 
 	// Tarformers handler to drop tree fs directory prefix from
 	// files to archive in the tarball.
@@ -405,16 +403,9 @@ func (w *WagonFactory) createTreeTarball(opts *WagonFactoryOpts,
 	topts := tools.NewTarCompressionOpts(true)
 	defer topts.Close()
 
-	if opts.CompressionMode != compression.None {
+	if opts.CompressionMode != tools.None {
 		topts.UseExt = false
-		switch opts.CompressionMode {
-		case compression.Zstandard:
-			topts.Mode = tools.Zstd
-		case compression.GZip:
-			topts.Mode = tools.Gzip
-		default:
-			topts.Mode = tools.None
-		}
+		topts.Mode = opts.CompressionMode
 	} else {
 		topts.Mode = tools.GetCompressionMode(tarball)
 	}
@@ -424,12 +415,7 @@ func (w *WagonFactory) createTreeTarball(opts *WagonFactoryOpts,
 		return nil, err
 	}
 
-	switch topts.Mode {
-	case tools.Zstd:
-		document.SetCompressionType(compression.Zstandard)
-	case tools.Gzip:
-		document.SetCompressionType(compression.GZip)
-	}
+	document.SetCompressionType(topts.Mode)
 
 	// Tarformers handler to drop tree fs directory prefix from
 	// files to archive in the tarball.

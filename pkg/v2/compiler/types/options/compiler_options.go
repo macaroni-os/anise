@@ -7,7 +7,7 @@ package options
 import (
 	"runtime"
 
-	"github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 )
 
 type Compiler struct {
@@ -18,7 +18,7 @@ type Compiler struct {
 	Push                bool                       `json:"push,omitempty" yaml:"push,omitempty"`
 	Privileged          bool                       `json:"privileged,omitempty" yaml:"privileged,omitempty"`
 	Concurrency         int                        `json:"concurrency,omitempty" yaml:"concurrency,omitempty"`
-	CompressionType     compression.Implementation `json:"compression_type,omitempty" yaml:"compression_type,omitempty"`
+	CompressionType     tarf_tools.CompressionMode `json:"compression_type,omitempty" yaml:"compression_type,omitempty"`
 
 	PackageTargetOnly bool `json:"package_targetonly,omitempty" yaml:"package_targetonly,omitempty"`
 	Rebuild           bool `json:"rebuild,omitempty" yaml:"rebuild,omitempty"`
@@ -32,7 +32,7 @@ func NewDefaultCompiler() *Compiler {
 		PushImageRepository: "anise/cache",
 		PullFirst:           false,
 		Push:                false,
-		CompressionType:     compression.None,
+		CompressionType:     tarf_tools.None,
 		KeepImg:             true,
 		Concurrency:         runtime.NumCPU(),
 		BackendType:         "dockerv3",
@@ -145,9 +145,9 @@ func Concurrency(i int) func(cfg *Compiler) error {
 	}
 }
 
-func WithCompressionType(t compression.Implementation) func(cfg *Compiler) error {
+func WithCompressionType(compression string) func(cfg *Compiler) error {
 	return func(cfg *Compiler) error {
-		cfg.CompressionType = t
+		cfg.CompressionType = tarf_tools.ParseCompressionMode(compression)
 		return nil
 	}
 }

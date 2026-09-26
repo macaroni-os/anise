@@ -13,15 +13,15 @@ import (
 	"github.com/macaroni-os/anise/pkg/config"
 	fhelpers "github.com/macaroni-os/anise/pkg/helpers/file"
 	artifact "github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
-	compression "github.com/macaroni-os/anise/pkg/v2/compiler/types/compression"
 
+	tarf_tools "github.com/geaaru/tar-formers/pkg/tools"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
 type WagonDocument struct {
 	FileName        string                     `json:"filename" yaml:"filename"`
-	CompressionType compression.Implementation `json:"compressiontype,omitempty" yaml:"compressiontype,omitempty"`
+	CompressionType tarf_tools.CompressionMode `json:"compressiontype,omitempty" yaml:"compressiontype,omitempty"`
 	Checksums       artifact.Checksums         `json:"checksums,omitempty" yaml:"checksums,omitempty"`
 }
 
