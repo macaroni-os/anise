@@ -77,17 +77,8 @@ type AniseBoxConfig struct {
 }
 
 type AniseSolverOptions struct {
-	Type           string  `yaml:"type,omitempty" json:"type,omitempty" mapstructure:"type"`
-	LearnRate      float32 `yaml:"rate,omitempty" json:"rate,omitempty" mapstructure:"rate"`
-	Discount       float32 `yaml:"discount,omitempty" json:"discount,omitempty" mapstructure:"discount"`
-	MaxAttempts    int     `yaml:"max_attempts,omitempty" json:"max_attempts,omitempty" mapstructure:"max_attempts"`
-	Implementation string  `yaml:"implementation,omitempty" json:"implementation,omitempty" mapstructure:"implementation"`
-}
-
-func (opts *AniseSolverOptions) CompactString() string {
-	return fmt.Sprintf(
-		"rate: %f, discount: %f, attempts: %d, initialobserved: %d, implementation: %s",
-		opts.LearnRate, opts.Discount, opts.MaxAttempts, 999999, opts.Implementation)
+	Type           string `yaml:"type,omitempty" json:"type,omitempty" mapstructure:"type"`
+	Implementation string `yaml:"implementation,omitempty" json:"implementation,omitempty" mapstructure:"implementation"`
 }
 
 type AniseSystemConfig struct {
@@ -111,9 +102,13 @@ func (s *AniseSystemConfig) SetRootFS(path string) error {
 func (sc *AniseSystemConfig) GetRepoDatabaseDirPath(name string) string {
 	dbpath := filepath.Join(sc.Rootfs, sc.DatabasePath)
 	dbpath = filepath.Join(dbpath, "repos/"+name)
-	err := os.MkdirAll(dbpath, os.ModePerm)
-	if err != nil {
-		panic(err)
+	if _, err := os.Stat(dbpath); err != nil {
+		if os.IsNotExist(err) {
+			err := os.MkdirAll(dbpath, os.ModePerm)
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
 	return dbpath
 }
@@ -126,9 +121,13 @@ func (c *AniseConfig) GetLockFilePath(lockfile string) string {
 
 func (sc *AniseSystemConfig) GetSystemRepoDatabaseDirPath() string {
 	dbpath := filepath.Join(sc.Rootfs, sc.DatabasePath)
-	err := os.MkdirAll(dbpath, os.ModePerm)
-	if err != nil {
-		panic(err)
+	if _, err := os.Stat(dbpath); err != nil {
+		if os.IsNotExist(err) {
+			err := os.MkdirAll(dbpath, os.ModePerm)
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
 	return dbpath
 }
