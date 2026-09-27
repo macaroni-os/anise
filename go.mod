@@ -17,7 +17,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/geaaru/pkgs-checker v0.14.1
-	github.com/geaaru/tar-formers v0.10.4
+	github.com/geaaru/tar-formers v0.10.5
 	github.com/ghodss/yaml v1.0.0
 	github.com/gofrs/flock v0.13.0
 	github.com/google/go-containerregistry v0.20.1

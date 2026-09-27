@@ -258,7 +258,11 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 		} else {
 			rename := t.Task.GetRename(name)
 			// Drop initial / for header name
-			name = rename[1:]
+			if rename[0:1] == "/" {
+				name = rename[1:]
+			} else {
+				name = rename
+			}
 		}
 
 		if t.Task.IsPath2Skip(name) {
@@ -515,7 +519,11 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 				targetPath = filepath.Join(dir, rename)
 			}
 			// Drop initial / for header name
-			name = rename[1:]
+			if rename[0:1] == "/" {
+				name = rename[1:]
+			} else {
+				name = rename
+			}
 		}
 
 		if t.Task.IsPath2Skip(absPath) {
