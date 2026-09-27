@@ -547,8 +547,7 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 }
 
 func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
-	opts *options.Compiler,
-	extractdir string) error {
+	opts *options.Compiler) error {
 
 	remotetaggedImage := fmt.Sprintf("%s:%s", opts.PushImageRepository,
 		art.FinalImageHash)
@@ -721,10 +720,6 @@ func (d *Dockerv3) ExportImage(art *artifact.PackageArtifact,
 func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 	builddir string, opts *options.Compiler) error {
 
-	// Build staging directory
-	buildPkgdir := filepath.Join(builddir,
-		art.GetPackage().HumanReadableString())
-
 	art.Path = filepath.Join(builddir, art.GetPackage().GetFingerPrint()+".package.tar")
 	art.CompressionType = opts.CompressionType
 	if art.CompressionType != tarf_tools.None {
@@ -732,7 +727,7 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 	}
 
 	// Extract files from the tagged image.
-	err = d.ExportImage(art, opts, pkgExtractDir)
+	err := d.ExportImage(art, opts)
 	if err != nil {
 		return err
 	}
