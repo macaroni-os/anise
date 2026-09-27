@@ -7,7 +7,6 @@ package docker
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -16,10 +15,7 @@ import (
 
 	continerdarchive "github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/images"
-	"github.com/docker/cli/cli/trust"
-	"github.com/docker/distribution/reference"
 	tregistry "github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/registry"
 	tarf "github.com/geaaru/tar-formers/pkg/executor"
 	tarf_specs "github.com/geaaru/tar-formers/pkg/specs"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -30,71 +26,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"github.com/theupdateframework/notary/tuf/data"
 )
-
-// See also https://github.com/docker/cli/blob/88c6089300a82d3373892adf6845a4fed1a4ba8d/cli/command/image/trust.go#L171
-
-func verifyImage(image string, authConfig *tregistry.AuthConfig) (string, error) {
-	ref, err := reference.ParseAnyReference(image)
-	if err != nil {
-		return "", errors.Wrapf(err, "invalid reference %s", image)
-	}
-
-	// only check if image ref doesn't contain hashes
-	if _, ok := ref.(reference.Digested); !ok {
-		namedRef, ok := ref.(reference.Named)
-		if !ok {
-			return "", errors.New("failed to resolve image digest using content trust: reference is not named")
-		}
-		namedRef = reference.TagNameOnly(namedRef)
-		taggedRef, ok := namedRef.(reference.NamedTagged)
-		if !ok {
-			return "", errors.New("failed to resolve image digest using content trust: reference is not tagged")
-		}
-
-		resolvedImage, err := trustedResolveDigest(context.Background(), taggedRef, authConfig, "anise")
-		if err != nil {
-			return "", errors.Wrap(err, "failed to resolve image digest using content trust")
-		}
-		resolvedFamiliar := reference.FamiliarString(resolvedImage)
-		return resolvedFamiliar, nil
-	}
-
-	return "", nil
-}
-
-func trustedResolveDigest(ctx context.Context, ref reference.NamedTagged, authConfig *tregistry.AuthConfig, useragent string) (reference.Canonical, error) {
-	repoInfo, err := registry.ParseRepositoryInfo(ref)
-	if err != nil {
-		return nil, err
-	}
-
-	notaryRepo, err := trust.GetNotaryRepository(os.Stdin, os.Stdout, useragent, repoInfo, authConfig, "pull")
-	if err != nil {
-		return nil, errors.Wrap(err, "error establishing connection to trust repository")
-	}
-
-	t, err := notaryRepo.GetTargetByName(ref.Tag(), trust.ReleasesRole, data.CanonicalTargetsRole)
-	if err != nil {
-		return nil, trust.NotaryError(repoInfo.Name.Name(), err)
-	}
-	// Only get the tag if it's in the top level targets role or the releases delegation role
-	// ignore it if it's in any other delegation roles
-	if t.Role != trust.ReleasesRole && t.Role != data.CanonicalTargetsRole {
-		return nil, trust.NotaryError(repoInfo.Name.Name(), errors.Errorf("No trust data for %s", reference.FamiliarString(ref)))
-	}
-
-	h, ok := t.Hashes["sha256"]
-	if !ok {
-		return nil, errors.New("no valid hash, expecting sha256")
-	}
-
-	dgst := digest.NewDigestFromHex("sha256", hex.EncodeToString(h))
-
-	// Allow returning canonical reference with tag
-	return reference.WithDigest(ref, dgst)
-}
 
 type staticAuth struct {
 	auth *tregistry.AuthConfig
@@ -156,14 +88,7 @@ func UnarchiveLayers(temp string, img v1.Image, image, dest string, auth *tregis
 }
 
 // DownloadAndExtractDockerImage extracts a container image natively. It supports privileged/unprivileged mode
-func DownloadAndExtractDockerImage(temp, image, dest string, auth *tregistry.AuthConfig, verify bool) (*images.Image, error) {
-	if verify {
-		img, err := verifyImage(image, auth)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed verifying image")
-		}
-		image = img
-	}
+func DownloadAndExtractDockerImage(temp, image, dest string, auth *tregistry.AuthConfig) (*images.Image, error) {
 
 	if !fileHelper.Exists(dest) {
 		if err := os.MkdirAll(dest, os.ModePerm); err != nil {
