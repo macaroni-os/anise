@@ -72,7 +72,7 @@ jobs:
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v4
         with:
-           distribution: goreleaser
+          distribution: goreleaser
           version: latest
           install-only: true
 
