@@ -12,7 +12,7 @@ require (
 	github.com/cavaliercoder/grab v1.0.1-0.20201108051000-98a5bfe305ec
 	github.com/containerd/containerd v1.7.36
 	github.com/crillab/gophersat v1.3.2-0.20210701121804-72b19f5b6b38
-	github.com/docker/cli v24.0.0+incompatible
+	github.com/docker/cli v29.8.1+incompatible
 	github.com/docker/distribution v2.8.2+incompatible
 	github.com/docker/docker v25.0.6+incompatible
 	github.com/docker/go-units v0.5.0
