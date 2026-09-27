@@ -100,7 +100,7 @@ func IsArchivePath(path string) bool {
 // DetectCompression detects the compression algorithm of the source.
 //
 // Deprecated: use [compression.Detect] instead.
-func DetectCompression(source []byte) archive.Compression {
+func DetectCompression(source []byte) compression.Compression {
 	return compression.Detect(source)
 }
 
@@ -156,7 +156,7 @@ func ReadSecurityXattrToTarHeader(path string, hdr *tar.Header) error {
 // stream of bytes.
 //
 // Deprecated: use [archive.Tar] instead.
-func Tar(path string, compression archive.Compression) (io.ReadCloser, error) {
+func Tar(path string, compression compression.Compression) (io.ReadCloser, error) {
 	return archive.TarWithOptions(path, &archive.TarOptions{Compression: compression})
 }
 
