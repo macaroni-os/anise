@@ -30,7 +30,8 @@ if [ "${ANISE_CONFIG_PROTECT}" = "1" ] ; then
   mkdir -p /etc/anise/config.protect.d || true
   curl -L https://raw.githubusercontent.com/${GITHUB_USER}/anise/${GITHUB_BRANCH}/contrib/config/config.protect.d/01_etc.yml.example --output /etc/anise/config.protect.d/01_etc.yml
 fi
-curl -L https://raw.githubusercontent.com/geaaru/repo-index/master/packages/geaaru-repo-index.yml --output /etc/anise/repos.conf.d/geaaru-repo-index.yml
+curl -L https://raw.githubusercontent.com/geaaru/repo-index/refs/heads/master/packages/macaroni-repo-index.yml \
+  --output /etc/anise/repos.conf.d/macaroni-repo-index.yml
 
 if [ ! -e /etc/anise/anise.yaml ] ; then
 
