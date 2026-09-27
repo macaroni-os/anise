@@ -82,4 +82,4 @@ changelog:
       - '^Merge pull request'
 release:
   header: |
-    Luet is the Macaroni OS Package Manager that uses containers for building packages.
+    Anise and Anise-Build are the Macaroni OS tools that use containers for building packages and install binary.
