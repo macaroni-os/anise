@@ -724,13 +724,6 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 	// Build staging directory
 	buildPkgdir := filepath.Join(builddir,
 		art.GetPackage().HumanReadableString())
-	pkgExtractDir := filepath.Join(buildPkgdir, "extractroofs")
-
-	// Create package build directory
-	err := fhelpers.EnsureDir(pkgExtractDir + "/")
-	if err != nil {
-		return err
-	}
 
 	art.Path = filepath.Join(builddir, art.GetPackage().GetFingerPrint()+".package.tar")
 	art.CompressionType = opts.CompressionType
