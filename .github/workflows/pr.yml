@@ -5,7 +5,7 @@ jobs:
   tests-integration:
     strategy:
       matrix:
-        go-version: [1.24.x]
+        go-version: [1.26.x]
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
@@ -35,7 +35,7 @@ jobs:
   tests-unit:
     strategy:
       matrix:
-        go-version: [1.22.x]
+        go-version: [1.26.x]
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
