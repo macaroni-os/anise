@@ -9,7 +9,7 @@ Anise is a multi-platform Build System and Package Manager based off from contai
 It has zero dependencies and it is well suitable for "from scratch" environments. It can also version entire rootfs and enables
 delivery of OTA-alike updates, making it a perfect fit for the Edge computing era and IoT embedded devices.
 
-It's originally based on [luet-0.17.0](https://github.com/mudler/luet).
+It's originally based on [luet-0.17.0](https://github.com/mudler/luet) but later totally rewritten.
 
 It offers a simple in YAML notation to define both packages and rootfs. As it is based on containers, it can be also used to build stages
 for Linux From Scratch installations and it can build and track updates for those systems.
