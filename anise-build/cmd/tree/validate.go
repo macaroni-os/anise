@@ -474,7 +474,7 @@ func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtim
 		tIdx := tree.NewTreeIdx(treePath, true)
 
 		if tIdx.HasIndex() {
-			err = tIdx.Read(treePath)
+			err = tIdx.DetectMode().Read(treePath)
 		} else {
 			Warning("Tree without index. Run `anise-build tree genidx`. Trying to generate indexes in memory")
 			err = tIdx.Generate(treePath,
