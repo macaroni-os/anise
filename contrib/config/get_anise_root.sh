@@ -11,14 +11,14 @@ GITHUB_USER="${GITHUB_USER:-macaroni-os}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-geaaru}"
 
 #ANISE_VERSION="v0.41.0-${GITHUB_USER}"
-ANISE_VERSION="v0.41.0-geaaru"
+ANISE_VERSION="v0.42.0"
 ANISE_ROOTFS=${ANISE_ROOTFS:-/}
 ANISE_DATABASE_PATH=${ANISE_DATABASE_PATH:-/var/cache/anise}
 ANISE_DATABASE_ENGINE=${ANISE_DATABASE_ENGINE:-boltdb}
 ANISE_CONFIG_PROTECT=${ANISE_CONFIG_PROTECT:-1}
 ANISE_ARCH=${ANISE_ARCH:-x86_64}
 
-curl -L https://github.com/${GITHUB_USER}/anise/releases/download/${ANISE_VERSION}/luet-${ANISE_VERSION}-Linux-${ANISE_ARCH} --output /usr/bin/anise
+curl -L https://github.com/${GITHUB_USER}/anise/releases/download/${ANISE_VERSION}/anise-${ANISE_VERSION}-Linux-${ANISE_ARCH} --output /usr/bin/anise
 #curl -L https://github.com/${GITHUB_USER}/anise/releases/download/${ANISE_VERSION}/anise-${ANISE_VERSION}-Linux-${ANISE_ARCH} --output /usr/bin/anise
 chmod +x /usr/bin/anise
 
@@ -46,22 +46,12 @@ EOF
 
 fi
 
-# Until next release of anise
-if [ ! -e /etc/luet ] ; then
-  cd /etc
-  ln -s anise luet
-  cd -
-  cd /etc/anise
-  ln -s anise.yaml luet.yaml
-  cd -
-fi
-
 if [ "${ANISE_ARCH}" = "x86_64" ] ; then
   anise repo update
   anise install -y repository/mottainai-stable repository/geaaru-repo-index --force
-  anise install --sync-repos -y system/anise-${GITHUB_USER} --force
+  anise install --sync-repos -y app-admin/anise --force
 else
-  echo "Luet ARM repositories are not available yet."
+  echo "Anise ARM repositories are not available yet."
 fi
 
 #rm -rf lue
