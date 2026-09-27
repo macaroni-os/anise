@@ -1,6 +1,6 @@
 FROM macaronios/terragon-minimal:latest-amd64 as builder
 RUN anise i -y --sync-repos make upx-bin go ca-certificates git && \
-      anise cleanup --purge-repos && mkdir /tmp
+      anise cleanup --purge-repos &&
 ADD . /anise
 RUN cd /anise && make build-small
 
