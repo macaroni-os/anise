@@ -8,7 +8,7 @@
 #   enable_logfile: false
 #
 #   Leave empty to skip logging to file.
-#   path: "/var/log/luet.log"
+#   path: "/var/log/anise.log"
 #
 #   Set logging level: error|warning|info|debug
 #   level: "info"
@@ -60,32 +60,32 @@
 # ---------------------------------------------
 # system:
 #
-#   Rootfs path of the luet system. Default is /.
+#   Rootfs path of the anise system. Default is /.
 #   A specific path could be used for test installation to
 #   a chroot environment.
 #   rootfs: "/"
 #
-#   Choice database engine used for luet database.
+#   Choice database engine used for anise database.
 #   Supported values: boltdb|memory
 #   database_engine: boltdb
 #
-#   Database path directory where store luet database.
+#   Database path directory where store anise database.
 #   The path is append to rootfs option path.
-#   database_path: "/var/cache/luet"
+#   database_path: "/var/cache/anise"
 #
-#   Define the tmpdir base directory where luet store temporary files.
-#   Default $TMPDIR/tmpluet
-#   tmpdir_base: "/tmp/tmpluet"
+#   Define the tmpdir base directory where anise store temporary files.
+#   Default $TMPDIR/tmpanise
+#   tmpdir_base: "/tmp/tmpanise"
 #
 #
 # ---------------------------------------------
 # Repositories configurations directories.
 # ---------------------------------------------
-# Define the list of directories where luet
+# Define the list of directories where anise
 # try for files with .yml extension that define
-# luet repository.
+# anise repository.
 # repos_confdir:
-#   - /etc/luet/repos.conf.d
+#   - /etc/anise/repos.conf.d
 #
 #
 # ------------------------------------------------
@@ -95,7 +95,7 @@
 # configuration files with the list of config
 # protect paths.
 # config_protect_confdir:
-#   - /etc/luet/config.protect.d
+#   - /etc/anise/config.protect.d
 #
 # Permit to ignore rules defined on
 # config protect confdir and packages
@@ -127,7 +127,7 @@
 #   - name: "repo1"
 #
 #     A user-friendly description of the repository
-#     description: "My luet repo"
+#     description: "My anise repo"
 #
 #     Type of the repository. Supported types are: dir|http. Mandatory.
 #     type: "dir"
@@ -145,14 +145,14 @@
 #     cached: false
 #
 #     Path where store tree of the specifications. Default path is $database_path/repos/$repo_name/treefs
-#     tree_path: "/var/cache/luet/repos/local/treefs"
+#     tree_path: "/var/cache/anise/repos/local/treefs"
 #
 #     Path where store repository metadata. Default path is $database_path/repos/$repo_name/meta
-#     meta_path: "/var/cache/luet/repos/local/meta"
+#     meta_path: "/var/cache/anise/repos/local/meta"
 #
 #     Define the list of the URL where retrieve tree and packages.
 #     urls:
-#        - https://mydomain.local/luet/repo1
+#        - https://mydomain.local/anise/repo1
 #
 #     auth:
 #        Define Basic authentication header
@@ -185,7 +185,7 @@
 # files where are defined the subsets enabled.
 # By default doesn't parse directories.
 # subsets_confdir:
-#   - /etc/luet/subsets.conf.d
+#   - /etc/anise/subsets.conf.d
 #
 # Define the list of the subsets enabled.
 # This is an inline configuration that is
@@ -200,7 +200,7 @@
 # the packages metadata.
 # By default doesn't parse directories.
 # subsets_defdir:
-#   - /etc/luet/subsets.def.d
+#   - /etc/anise/subsets.def.d
 #
 #
 # ---------------------------------------------
