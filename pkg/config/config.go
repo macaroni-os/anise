@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	AniseVersion     = "0.42.2"
+	AniseVersion     = "0.42.3"
 	AniseEnvPrefix   = "ANISE"
 	AniseForkVersion = ""
 )
