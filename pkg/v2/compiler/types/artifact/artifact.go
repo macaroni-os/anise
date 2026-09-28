@@ -684,53 +684,43 @@ func (a *PackageArtifact) Unpack(dst string, enableSubsets bool) error {
 		return errors.New("destination must be an absolute path")
 	}
 
+	tarformers := tarf.NewTarFormers(tarf.GetOptimusPrime().Config)
+
 	// Create protected file list
 	protectedFiles := a.GetProtectFiles()
 	// Create untar specs
 	spec := a.GetTarFormersSpec(enableSubsets)
+	spec.TriggeredFiles = protectedFiles
 
-	switch a.CompressionType {
-	case tarf_tools.Zstd:
-		original, err := os.Open(a.CachePath)
-		if err != nil {
-			return errors.Wrap(err, "Cannot open "+a.CachePath)
-		}
-		defer original.Close()
+	topts := tarf_tools.NewTarReaderCompressionOpts(false)
+	// I use ParseCompressionMode in order to correctly manage
+	// old package with compression string type gzip instead of gz.
+	// This seems a better approach to handle legacy packages and new.
+	topts.Mode = tarf_tools.ParseCompressionMode(string(a.CompressionType))
+	defer topts.Close()
 
-		//		bufferedReader := bufio.NewReader(original)
-		d, err := zstd.NewReader(original)
-		if err != nil {
-			return err
-		}
-		defer d.Close()
-
-		err = helpers.UntarProtectSpecCompress(dst,
-			protectedFiles, tarModifierWrapperFunc, spec, d)
-		return err
-	case tarf_tools.Gzip:
-		// Create the uncompressed archive
-		original, err := os.Open(a.CachePath)
-		if err != nil {
-			return errors.Wrap(err, "Cannot open "+a.CachePath)
-		}
-		defer original.Close()
-
-		r, err := gzip.NewReader(original)
-		if err != nil {
-			return err
-		}
-		defer r.Close()
-
-		err = helpers.UntarProtectSpecCompress(dst,
-			protectedFiles, tarModifierWrapperFunc, spec, r)
-		return err
-	// Defaults to tar only (covers when "none" is supplied)
-	default:
-		return helpers.UntarProtect(a.CachePath, dst,
-			AniseCfg.GetGeneral().SameOwner,
-			AniseCfg.GetGeneral().OverwriteDirPerms,
-			protectedFiles, tarModifierWrapperFunc)
+	err := tarf_tools.PrepareTarReader(a.CachePath, topts)
+	if err != nil {
+		return fmt.Errorf("error on prepare tar reader for file %s: %s",
+			a.CachePath, err.Error())
 	}
+
+	if topts.CompressReader != nil {
+		tarformers.SetReader(topts.CompressReader)
+	} else {
+		tarformers.SetReader(topts.FileReader)
+	}
+
+	tarformers.SetFileHandler(tarModifierWrapperFunc)
+
+	err = tarformers.RunTask(spec, dst)
+	if err != nil {
+		return fmt.Errorf(
+			"error on process %s: %s",
+			a.CachePath, err.Error(),
+		)
+	}
+	return nil
 }
 
 // FileList generates the list of file of a package from the local archive
