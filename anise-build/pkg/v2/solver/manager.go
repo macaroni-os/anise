@@ -227,6 +227,14 @@ func (bm *BuildManager) buildPackageTask(
 		elabp, _ := elaboratedPkgsMap.MatchVersion(p)
 		if elabp != nil {
 			// POST: package already elaborated. Skipping.
+
+			// This artifact could be generated inside another
+			// package task with a different artifact object.
+			// We need to ensure that the hashes will be always
+			// set.
+			solution.Artifacts[idx].SetBuildImageHash(elabp.GetBuildImageHash())
+			solution.Artifacts[idx].SetFinalImageHash(elabp.GetFinalImageHash())
+
 			continue
 		}
 
