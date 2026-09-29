@@ -71,7 +71,7 @@ Some notes about `anise` project:
 To install `anise`, you can grab a release on the [Release page](https://github.com/macaroni-os/anise/releases) or to install it in your system:
 
 ```bash
-$> curl https://raw.githubusercontent.com/macaroni-os/anise/geaaru/contrib/config/get_anise_root.sh | sh
+$> curl https://raw.githubusercontent.com/macaroni-os/anise/refs/heads/geaaru/contrib/config/get_anise_root.sh | sh
 $> anise search ...
 $> anise install ..
 $> anise --help
