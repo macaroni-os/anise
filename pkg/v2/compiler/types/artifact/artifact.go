@@ -47,7 +47,6 @@ type PackageArtifact struct {
 	CachePath string `json:"cache_path,omitempty" yaml:"cache_path,omitempty"`
 	TreePath  string `json:"tree_path,omitempty" yaml:"tree_path,omitempty"`
 
-	Dependencies    []*PackageArtifact            `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 	CompileSpec     *compilerspec.CompilationSpec `json:"compilespec,omitempty" yaml:"compilespec,omitempty"`
 	Checksums       Checksums                     `json:"checksums" yaml:"checksums"`
 	CompressionType tarf_tools.CompressionMode    `json:"compressiontype" yaml:"compressiontype"`
@@ -93,28 +92,30 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 
 	pthin.UseFlags = p.GetPackage().GetUses()
 
-	if len(p.Dependencies) > 0 && withDeps {
+	buildPackage := p.CompileSpec.Package
 
-		for _, dep := range p.Dependencies {
+	if len(buildPackage.GetRequires()) > 0 && withDeps {
+
+		for _, dep := range buildPackage.GetRequires() {
 
 			depthin := pkg.NewPackageThin(
-				dep.GetPackage().GetName(),
-				dep.GetPackage().GetCategory(),
-				dep.GetPackage().GetVersion(),
+				dep.GetName(),
+				dep.GetCategory(),
+				dep.GetVersion(),
 				[]*pkg.PackageThin{}, []*pkg.PackageThin{},
 			)
 
 			if solution != nil {
-				if solution.HasKey(dep.GetPackage().PackageName()) {
-					artefacts, _ := solution.GetArtifactsByKey(dep.GetPackage().PackageName())
-					depthin.Version = artefacts[0].GetPackage().GetVersion()
+				if solution.HasKey(dep.PackageName()) {
+					artefacts, _ := solution.GetArtifactsByKey(dep.PackageName())
+					depthin.Version = artefacts[0].GetVersion()
 
 				} else {
 					// Check if the package is provided
-					provides := solution.GetProvides(dep.GetPackage().PackageName())
+					provides := solution.GetProvides(dep.PackageName())
 					if len(provides) == 0 {
 						return nil, fmt.Errorf("No package for %s found on solution.",
-							dep.GetPackage().PackageName())
+							dep.PackageName())
 					}
 
 					depthin = pkg.NewPackageThin(
@@ -182,7 +183,7 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 }
 
 func NewPackageArtifact(path string) *PackageArtifact {
-	return &PackageArtifact{Path: path, TreePath: path, Dependencies: []*PackageArtifact{}, Checksums: Checksums{}, CompressionType: tarf_tools.None}
+	return &PackageArtifact{Path: path, TreePath: path, Checksums: Checksums{}, CompressionType: tarf_tools.None}
 }
 
 func NewPackageArtifactFromYaml(data []byte) (*PackageArtifact, error) {
