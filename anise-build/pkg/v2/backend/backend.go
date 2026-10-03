@@ -29,9 +29,11 @@ type BackendCompiler interface {
 		builddir string, opts *options.Compiler) error
 
 	GenerateFinalImageHash(art *artifact.PackageArtifact,
-		pthin *pkg.PackageThin, opts *options.Compiler) error
+		pthin *pkg.PackageThin, solution *artifact.ArtifactsPack,
+		opts *options.Compiler) error
 	GenerateBuildImageHash(art *artifact.PackageArtifact,
-		pthin *pkg.PackageThin, opts *options.Compiler) error
+		pthin *pkg.PackageThin, solution *artifact.ArtifactsPack,
+		opts *options.Compiler) error
 }
 
 func NewBackend(s string, c *cfg.AniseConfig) (BackendCompiler, error) {

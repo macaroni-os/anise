@@ -109,7 +109,7 @@ func NewTreeImageCommand(config *AniseConfig) *cobra.Command {
 				}
 
 				err = backendService.GenerateFinalImageHash(candidates.Artifacts[idx],
-					pThin, buildOpts)
+					pThin, candidates, buildOpts)
 				if err != nil {
 					Fatal(err)
 				}

@@ -36,6 +36,19 @@ type Dockerv3 struct {
 	Config *cfg.AniseConfig
 }
 
+type DockerImageInfo struct {
+	Containers   string `json:"Containers,omitempty"`
+	CreatedAt    string `json:"CreatedAt,omitempty"`
+	CreatedSince string `json:"CreatedSince,omitempty"`
+	Digest       string `json:"Digest,omitempty`
+	ID           string `json:"ID,omitempty"`
+	Repository   string `json:"Repository,omitempty"`
+	SharedSize   string `json:"SharedSize,omitempty"`
+	Tag          string `json:"Tag,omitempty"`
+	UniqueSize   string `json:UniqueSize,omitempty"`
+	VirtualSize  string `json:VirtualSize,omitempty"`
+}
+
 // Mutex to avoid errors on parallel
 // setup of the viper object.
 var mutex sync.Mutex
@@ -47,7 +60,9 @@ func NewDockerv3Backend(c *cfg.AniseConfig) BackendCompiler {
 }
 
 func (d *Dockerv3) GenerateBuildImageHash(art *artifact.PackageArtifact,
-	pthin *pkg.PackageThin, opts *options.Compiler) error {
+	pthin *pkg.PackageThin, solution *artifact.ArtifactsPack,
+	opts *options.Compiler) error {
+
 	var psha hash.Hash = sha256.New()
 
 	b, err := json.Marshal(pthin)
@@ -58,6 +73,32 @@ func (d *Dockerv3) GenerateBuildImageHash(art *artifact.PackageArtifact,
 	}
 
 	psha.Write(b)
+
+	// The package thin is been generated using versions of the solution
+	// but using only the package version doesn't permit to catch variation
+	// of upper dependencies. For this reason we use the final image sha
+	// of the images that are always based on the uppper dependency hash.
+	if pthin.HasRequires() {
+		solutionMap := solution.ToMap()
+		for _, dep := range pthin.GetRequires() {
+
+			key := dep.PackageName()
+			if solutionMap.HasKey(key) {
+				parts, _ := solutionMap.GetArtifactsByKey(key)
+
+				if parts[0].GetFinalImageHash() != "" {
+					psha.Write([]byte(parts[0].GetFinalImageHash()))
+				}
+
+			} else {
+				parts := solutionMap.GetProvides(key)
+				if len(parts) > 0 && parts[0].GetFinalImageHash() != "" {
+					psha.Write([]byte(parts[0].GetFinalImageHash()))
+				}
+			}
+
+		}
+	}
 
 	// For build images using envs, prelude, image, seed
 	if len(art.CompileSpec.Env) > 0 {
@@ -81,7 +122,8 @@ func (d *Dockerv3) GenerateBuildImageHash(art *artifact.PackageArtifact,
 }
 
 func (d *Dockerv3) GenerateFinalImageHash(art *artifact.PackageArtifact,
-	pthin *pkg.PackageThin, opts *options.Compiler) error {
+	pthin *pkg.PackageThin, solution *artifact.ArtifactsPack,
+	opts *options.Compiler) error {
 
 	// NOTE: I generate the hashing inside the docker backend
 	//       because different technologies uses different logics.
@@ -96,6 +138,32 @@ func (d *Dockerv3) GenerateFinalImageHash(art *artifact.PackageArtifact,
 	}
 
 	psha.Write(b)
+
+	// The package thin is been generated using versions of the solution
+	// but using only the package version doesn't permit to catch variation
+	// of upper dependencies. For this reason we use the final image sha
+	// of the images that are always based on the uppper dependency hash.
+	if pthin.HasRequires() {
+		solutionMap := solution.ToMap()
+		for _, dep := range pthin.GetRequires() {
+
+			key := dep.PackageName()
+			if solutionMap.HasKey(key) {
+				parts, _ := solutionMap.GetArtifactsByKey(key)
+
+				if parts[0].GetFinalImageHash() != "" {
+					psha.Write([]byte(parts[0].GetFinalImageHash()))
+				}
+
+			} else {
+				parts := solutionMap.GetProvides(key)
+				if len(parts) > 0 && parts[0].GetFinalImageHash() != "" {
+					psha.Write([]byte(parts[0].GetFinalImageHash()))
+				}
+			}
+
+		}
+	}
 
 	// For build images using envs, prelude, image, seed
 	if len(art.CompileSpec.Env) > 0 {
@@ -285,7 +353,7 @@ func (d *Dockerv3) CreateBuildImage(art *artifact.PackageArtifact,
 		return err
 	}
 
-	err = d.GenerateBuildImageHash(art, pThin, opts)
+	err = d.GenerateBuildImageHash(art, pThin, solution, opts)
 	if err != nil {
 		return err
 	}
@@ -340,6 +408,15 @@ func (d *Dockerv3) CreateBuildImage(art *artifact.PackageArtifact,
 				"'. Will keep going and build the image unless you use --fatal")
 			Warning(err.Error())
 		}
+	}
+
+	// Check if the image is already present locally
+	isAvailable, err := d.HasLocalTaggedImage(remoteBuildertaggedImage)
+	if err != nil {
+		Warning("Failed searching locallly image " + remoteBuildertaggedImage)
+		Warning(err.Error())
+	} else if isAvailable {
+		buildImage = false
 	}
 
 	if buildImage {
@@ -462,7 +539,7 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		return err
 	}
 
-	err = d.GenerateFinalImageHash(art, pThin, opts)
+	err = d.GenerateFinalImageHash(art, pThin, solution, opts)
 	if err != nil {
 		return err
 	}
@@ -504,6 +581,15 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 				"'. Will keep going and build the image unless you use --fatal")
 			Warning(err.Error())
 		}
+	}
+
+	// Check if the image is already present locally
+	isAvailable, err := d.HasLocalTaggedImage(remotetaggedImage)
+	if err != nil {
+		Warning("Failed searching locallly image " + remotetaggedImage)
+		Warning(err.Error())
+	} else if isAvailable {
+		buildImage = false
 	}
 
 	if buildImage {
@@ -875,4 +961,38 @@ func (d *Dockerv3) FlatImage(art *artifact.PackageArtifact,
 		imageName, art.GetPackage().HumanReadableString()))
 
 	return nil
+}
+
+func (d *Dockerv3) HasLocalTaggedImage(remotetaggedImage string) (bool, error) {
+
+	// Create the container from specified image
+	dockerImageList := []string{
+		"image", "list",
+		"--filter",
+		"reference=" + remotetaggedImage,
+		"--format", "json",
+	}
+	Debug(fmt.Sprintf(":whale: Search image %s locally...", remotetaggedImage))
+
+	out, err := exec.Command("docker", dockerImageList...).CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("failed check if image %s is present locally: %s",
+			remotetaggedImage, err.Error())
+	}
+
+	if string(out) == "" {
+		return false, nil
+	}
+
+	dinfo := &DockerImageInfo{}
+	err = json.Unmarshal(out, dinfo)
+	if err != nil {
+		return false, fmt.Errorf("failed unmarshal image data: %s", err.Error())
+	}
+
+	InfoC(fmt.Sprintf(
+		":factory: Using local image %s (VirtualSize %s) created %s",
+		remotetaggedImage, dinfo.VirtualSize, dinfo.CreatedAt))
+
+	return true, nil
 }
