@@ -357,9 +357,6 @@ func GenDefault(viper *v.Viper) {
 	viper.SetDefault("finalizer_envs", make(map[string]string, 0))
 
 	viper.SetDefault("solver.type", "")
-	viper.SetDefault("solver.rate", 0.7)
-	viper.SetDefault("solver.discount", 1.0)
-	viper.SetDefault("solver.max_attempts", 9000)
 
 	viper.SetDefault("tar_flows.mutex4dir", true)
 	viper.SetDefault("tar_flows.max_openfiles", 100)
