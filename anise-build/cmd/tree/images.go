@@ -143,7 +143,7 @@ func NewTreeImageCommand(config *AniseConfig) *cobra.Command {
 
 				InfoC(Bold(":whale2: List of images for package:"))
 				ndeps := len(results.Packages) - 2
-				for i := 0; i < ndeps; i++ {
+				for i := 0; i <= ndeps; i++ {
 					p := results.Packages[i]
 					InfoC(fmt.Sprintf(":wrench: %s :right_arrow: %s/%s-%s",
 						p.Image,
