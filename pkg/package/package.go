@@ -118,8 +118,6 @@ type Package interface {
 	SetTreeDir(s string)
 	GetTreeDir() string
 
-	Mark() Package
-
 	JSON() ([]byte, error)
 
 	GetRepository() string
@@ -131,14 +129,6 @@ const (
 	PackageCollectionFile = "collection.yaml"
 	PackageDefinitionFile = "definition.yaml"
 )
-
-type Tree interface {
-	GetPackageSet() PackageDatabase
-	Prelude() string // A tree might have a prelude to be able to consume a tree
-	SetPackageSet(s PackageDatabase)
-	World() (Packages, error)
-	FindPackage(Package) (Package, error)
-}
 
 type Packages []Package
 
@@ -158,17 +148,6 @@ func (pm PackageMap) String() string {
 
 func (d DefaultPackage) HasRequires() bool {
 	return tools.Ternary(d.PackageRequires != nil, len(d.PackageRequires) > 0, false)
-}
-
-func (d DefaultPackages) Hash(salt string) string {
-
-	overallFp := ""
-	for _, c := range d {
-		overallFp = overallFp + c.HashFingerprint("join")
-	}
-	h := md5.New()
-	io.WriteString(h, fmt.Sprintf("%s-%s", overallFp, salt))
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func NewDefaultPackageFromYaml(data []byte) (*DefaultPackage, error) {
@@ -628,12 +607,6 @@ func (p *DefaultPackage) AtomMatches(m Package) bool {
 		return true
 	}
 	return false
-}
-
-func (p *DefaultPackage) Mark() Package {
-	marked := p.Clone()
-	marked.SetName("@@" + marked.GetName())
-	return marked
 }
 
 func (p *DefaultPackage) Expand(definitiondb PackageDatabase) (Packages, error) {
