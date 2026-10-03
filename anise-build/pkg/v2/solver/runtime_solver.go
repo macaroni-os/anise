@@ -13,32 +13,26 @@ import (
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
-	"github.com/macaroni-os/anise/pkg/v2/compiler/types/specs"
-	"github.com/macaroni-os/anise/pkg/v2/render"
 	"github.com/macaroni-os/anise/pkg/v2/tree"
 
 	. "github.com/logrusorgru/aurora"
 )
 
-type BuildSolver struct {
+type RuntimeSolver struct {
 	*BaseSolver
 
-	RenderEngine *render.RenderEngine `yaml:"-" json:"-"`
-	Opts         *BuildSolverOpts     `yaml:"-" json:"-"`
+	Opts *RuntimeSolverOpts `yaml:"-" json:"-"`
 }
 
-func NewBuildSolver(cfg *config.AniseConfig,
-	opts *BuildSolverOpts) *BuildSolver {
-	return &BuildSolver{
+func NewRuntimeSolver(cfg *config.AniseConfig,
+	opts *RuntimeSolverOpts) *RuntimeSolver {
+	return &RuntimeSolver{
 		BaseSolver: NewBaseSolver(cfg),
 		Opts:       opts,
 	}
 }
 
-func (s *BuildSolver) SetRenderEngine(re *render.RenderEngine) { s.RenderEngine = re }
-func (s *BuildSolver) GetRenderEngine() *render.RenderEngine   { return s.RenderEngine }
-
-func (s *BuildSolver) Resolve(pkgs *[]*pkg.DefaultPackage) (*artifact.ArtifactsPack, error) {
+func (s *RuntimeSolver) Resolve(pkgs *[]*pkg.DefaultPackage) (*artifact.ArtifactsPack, error) {
 	ans := artifact.NewArtifactsPack()
 	apMap := artifact.NewArtifactsMap()
 
@@ -63,7 +57,7 @@ func (s *BuildSolver) Resolve(pkgs *[]*pkg.DefaultPackage) (*artifact.ArtifactsP
 	return ans, nil
 }
 
-func (s *BuildSolver) ResolvePackage(p *pkg.DefaultPackage) (*artifact.ArtifactsPack, error) {
+func (s *RuntimeSolver) ResolvePackage(p *pkg.DefaultPackage) (*artifact.ArtifactsPack, error) {
 	ans := artifact.NewArtifactsPack()
 	apMap := artifact.NewArtifactsMap()
 	vMap := make(map[string]bool, 0)
@@ -124,55 +118,16 @@ func (s *BuildSolver) ResolvePackage(p *pkg.DefaultPackage) (*artifact.Artifacts
 	return ans, nil
 }
 
-func (s *BuildSolver) LoadCompilationSpec(
-	t *tree.TreeIdx, vtree *tree.TreeIdxPkg, p *pkg.DefaultPackage) (*specs.CompilationSpecLoad, string, error) {
-
-	var cs *specs.CompilationSpecLoad
-	var err error
-
-	// Using render engine to read build.yaml
-	pkgPath := filepath.Join(t.TreePath, t.BaseDir, filepath.Dir(vtree.Path))
-
-	defFile := filepath.Join(pkgPath, filepath.Base(vtree.Path))
-	buildFile := filepath.Join(pkgPath, "build.yaml")
-
-	DebugC(fmt.Sprintf(":brain:For %s-%s using buildfile:\t\t%s",
-		p.PackageName(), vtree.Version, buildFile))
-
-	DebugC(fmt.Sprintf(
-		":brain:For %s-%s using package specs:\t\t%s",
-		p.PackageName(), vtree.Version, defFile))
-
-	if filepath.Base(defFile) == "collection.yaml" {
-
-		atom := pkg.NewPackageWithCatThin(
-			p.Category, p.Name,
-			vtree.Version)
-
-		cs, err = tree.ReadBuildFileFromCollection(buildFile, defFile,
-			s.RenderEngine, atom, map[string]interface{}{})
-	} else {
-		cs, err = tree.ReadBuildFile(buildFile, defFile,
-			s.RenderEngine, map[string]interface{}{})
-	}
-	if err != nil {
-		return nil, "", fmt.Errorf(
-			"error on rendering package %s-%s: %s",
-			p.PackageName(), vtree.Version, err.Error())
-	}
-
-	return cs, pkgPath, nil
-}
-
-func (s *BuildSolver) ResolvePackageTask(ptask *PackageTask) (*artifact.ArtifactsPack, error) {
+func (s *RuntimeSolver) ResolvePackageTask(ptask *PackageTask) (*artifact.ArtifactsPack, error) {
 	// The stack array is used to catch dependencies cycles.
 	stack := []string{}
 
 	// Resolve recors
 	return s.resolvePackage(ptask, stack)
+
 }
 
-func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artifact.ArtifactsPack, error) {
+func (s *RuntimeSolver) resolvePackage(ptask *PackageTask, stack []string) (*artifact.ArtifactsPack, error) {
 	ans := artifact.NewArtifactsPack()
 
 	if helpers.ContainsElem(&stack, ptask.PackageSelector.PackageName()) {
@@ -186,37 +141,33 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 
 	stack = append(stack, ptask.PackageSelector.PackageName())
 
-	cs, pkgPath, err := s.LoadCompilationSpec(ptask.Tree, ptask.Version, ptask.PackageSelector)
+	// Using render engine to read build.yaml
+	defFile := filepath.Join(ptask.Tree.TreePath, ptask.Tree.BaseDir, ptask.Version.Path)
+	pkgPath := filepath.Dir(defFile)
+
+	runtimePackage, err := tree.ReadDefinitionFile(defFile)
 	if err != nil {
-		return ans, err
+		return nil, err
 	}
 
-	// Stage1. Before elaborate all dependencies I try to retrieve all dependencies
-	//         selectors to validate AND conditions.
-
 	// Check if the package has conflicts
-	if cs.DefaultPackage != nil && len(cs.DefaultPackage.GetConflicts()) > 0 {
-		for _, conflict := range cs.DefaultPackage.GetConflicts() {
-
-			if conflict.GetVersion() == "" {
-				conflict.Version = ">=0"
-			}
-
+	if len(runtimePackage.GetConflicts()) > 0 {
+		for _, conflict := range runtimePackage.GetConflicts() {
 			ptask.AddConflict(conflict)
 		}
 	}
 
-	// Check if the package has dependencies to recursively resolve them
-	if cs.DefaultPackage != nil && len(cs.DefaultPackage.GetRequires()) > 0 {
+	// Check if the package has dependencies to recursively resolve
+	if len(runtimePackage.GetRequires()) > 0 {
 
-		for _, dep := range cs.DefaultPackage.GetRequires() {
+		for _, dep := range runtimePackage.GetRequires() {
 
 			if dep.GetVersion() == "" {
 				dep.Version = ">=0"
 			}
 
 			DebugC(fmt.Sprintf(":satellite: [%s] Processing dependency selector %s ...",
-				cs.DefaultPackage.HumanReadableString(), dep.HumanReadableString()))
+				runtimePackage.HumanReadableString(), dep.HumanReadableString()))
 
 			// Retrieve all available packages of the selected dependency
 			// The packages not admitted by the selector are dropped from
@@ -257,61 +208,9 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 
 	}
 
-	if cs.Copy != nil && len(cs.Copy) > 0 {
-
-		for _, c := range cs.Copy {
-
-			dep := c.Package
-
-			if dep.GetVersion() == "" {
-				dep.Version = ">=0"
-			}
-
-			DebugC(fmt.Sprintf(":satellite: [%s] Processing copy dependency selector %s ...",
-				cs.DefaultPackage.HumanReadableString(), dep.HumanReadableString()))
-
-			// Retrieve all available packages of the selected dependency
-			// The packages not admitted by the selector are dropped from
-			// the list.
-			reqIdx, err := s.ForestGuard.SearchPackage(dep)
-			if err != nil {
-				return ans, err
-			}
-
-			// Fragments and sort all availables version. (it drops duplicates too).
-			// Sort in reverse order (newest before old).
-			reqIdx = *tree.FragmentTrees(&reqIdx, dep.PackageName(), true)
-
-			// Iterate for every version available of the analyzed dependencies. I will
-			// add informations in the availablesDepsMap of the package task.
-			// This phase wants retrieve and load the packages metadata of all
-			// dependencies and versions available. The identification of the
-			// build order of these dependencies is done later.
-
-			for _, tidx := range reqIdx {
-
-				// NOTE: Every TreeIdx contains only one version
-				versions, _ := tidx.GetPackageVersions(dep.PackageName())
-
-				deps, err := s.recursiveLoadDep(ptask, tidx, versions[0], dep, stack)
-				if err != nil {
-					return ans, err
-				}
-
-				for idx := range deps.Artifacts {
-					ptask.availablesDepsMap.Add(deps.Artifacts[idx])
-				}
-			}
-
-		}
-
-	}
-
 	// Create Package artifact with path sets to the home directory
-	// for the build.
 	ptask.Artifact = artifact.NewPackageArtifact(pkgPath)
-	ptask.Artifact.CompileSpec = cs.ToSpec()
-	ptask.Artifact.ToGenerate = true
+	ptask.Artifact.Runtime = runtimePackage
 
 	// Stage2: resolve recursively candidates using availables artifacts
 	if len(ptask.availablesDepsMap.Artifacts) > 0 {
@@ -354,7 +253,7 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 	return ans, nil
 }
 
-func (s *BuildSolver) recursiveLoadDep(ptask *PackageTask,
+func (s *RuntimeSolver) recursiveLoadDep(ptask *PackageTask,
 	t *tree.TreeIdx, vtree *tree.TreeIdxPkg,
 	selector *pkg.DefaultPackage, stack []string) (*artifact.ArtifactsPack, error) {
 
@@ -370,27 +269,30 @@ func (s *BuildSolver) recursiveLoadDep(ptask *PackageTask,
 
 	stack = append(stack, selector.PackageName())
 
-	cs, pkgPath, err := s.LoadCompilationSpec(t, vtree, selector)
+	// Using render engine to read build.yaml
+	defFile := filepath.Join(t.TreePath, t.BaseDir, vtree.Path)
+	pkgPath := filepath.Dir(defFile)
+
+	runtimePackage, err := tree.ReadDefinitionFile(defFile)
 	if err != nil {
-		return ans, err
+		return nil, err
 	}
 
 	artDep := artifact.NewPackageArtifact(pkgPath)
-	artDep.CompileSpec = cs.ToSpec()
+	artDep.Runtime = runtimePackage
 
 	ans.Add(artDep)
 
-	// Check if the package has dependencies to recursively resolve them
-	if cs.DefaultPackage != nil && len(cs.DefaultPackage.GetRequires()) > 0 {
+	if len(runtimePackage.GetRequires()) > 0 {
 
-		for _, dep := range cs.DefaultPackage.GetRequires() {
+		for _, dep := range runtimePackage.GetRequires() {
 
 			if dep.GetVersion() == "" {
 				dep.Version = ">=0"
 			}
 
 			DebugC(fmt.Sprintf(":satellite: [%s] Processing dependency %s ...",
-				cs.DefaultPackage.HumanReadableString(), dep.HumanReadableString()))
+				runtimePackage.HumanReadableString(), dep.HumanReadableString()))
 
 			// Retrieve all available packages of the selected dependency
 			// The packages not admitted by the selector are dropped from
@@ -417,56 +319,7 @@ func (s *BuildSolver) recursiveLoadDep(ptask *PackageTask,
 				if len(deps.Artifacts) > 0 {
 					ans.AppendPack(deps)
 				}
-			}
 
-		}
-
-	}
-
-	if cs.Copy != nil && len(cs.Copy) > 0 {
-
-		for _, c := range cs.Copy {
-
-			dep := c.Package
-
-			if dep.GetVersion() == "" {
-				dep.Version = ">=0"
-			}
-
-			DebugC(fmt.Sprintf(":satellite: [%s] Processing copy dependency selector %s ...",
-				cs.DefaultPackage.HumanReadableString(), dep.HumanReadableString()))
-
-			// Retrieve all available packages of the selected dependency
-			// The packages not admitted by the selector are dropped from
-			// the list.
-			reqIdx, err := s.ForestGuard.SearchPackage(dep)
-			if err != nil {
-				return ans, err
-			}
-
-			// Fragments and sort all availables version. (it drops duplicates too).
-			// Sort in reverse order (newest before old).
-			reqIdx = *tree.FragmentTrees(&reqIdx, dep.PackageName(), true)
-
-			// Iterate for every version available of the analyzed dependencies. I will
-			// add informations in the availablesDepsMap of the package task.
-			// This phase wants retrieve and load the packages metadata of all
-			// dependencies and versions available. The identification of the
-			// build order of these dependencies is done later.
-
-			for _, tidx := range reqIdx {
-
-				// NOTE: Every TreeIdx contains only one version
-				versions, _ := tidx.GetPackageVersions(dep.PackageName())
-
-				deps, err := s.recursiveLoadDep(ptask, tidx, versions[0], dep, stack)
-				if err != nil {
-					return ans, err
-				}
-
-				if len(deps.Artifacts) > 0 {
-					ans.AppendPack(deps)
-				}
 			}
 
 		}
