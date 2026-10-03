@@ -629,6 +629,8 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		}
 	}
 
+	art.PackageCacheImage = remotetaggedImage
+
 	return nil
 }
 
