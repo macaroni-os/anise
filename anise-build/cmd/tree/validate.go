@@ -183,69 +183,42 @@ func validateRuntime(task *ValidateTask, opts *ValidateOpts,
 
 	var lastError error
 
-	// Check if all runtime dependencies are present in the tree
-	numRuntimeDeps := len(pruntime.GetRequires())
+	runtimeOpts := solver.NewRuntimeSolverOpts()
+	s := solver.NewRuntimeSolver(opts.Config, runtimeOpts)
 
-	if numRuntimeDeps > 0 {
+	// Setup the forest guard for the solver
+	s.SetForestGuard(opts.ForestGuard)
 
-		for _, dep := range pruntime.GetRequires() {
+	if opts.WithSolver {
 
-			depOk := false
-			trees, _ := opts.ForestGuard.SearchPackage(dep)
+		_, err := s.ResolvePackage(pruntime)
+		if err != nil {
+			return false, err
+		}
 
-			for _, ti := range trees {
-				versions, _ := ti.GetPackageVersions(dep.PackageName())
+	} else {
 
-				for _, ver := range versions {
-					pkg2check := &pkg.DefaultPackage{
-						Name:     pruntime.Name,
-						Category: pruntime.Category,
-						Version:  ver.Version,
-					}
+		// Check if all runtime dependencies are present in the tree
+		numRuntimeDeps := len(pruntime.GetRequires())
 
-					valid, err := pruntime.Admit(pkg2check)
-					if err != nil {
-						lastError = err
-						break
-					}
-					if valid {
-						depOk = true
-						// POST: This version could be used from the package.
-						break
-					}
+		if numRuntimeDeps > 0 {
 
-				}
+			for _, dep := range pruntime.GetRequires() {
 
-				if depOk {
-					break
-				}
-			}
+				depOk := false
+				trees, _ := opts.ForestGuard.SearchPackage(dep)
 
-			if !depOk {
-				// Check if the dependency is a provides
-				provides, _ := opts.ForestGuard.SearchProvides(dep)
+				for _, ti := range trees {
+					versions, _ := ti.GetPackageVersions(dep.PackageName())
 
-				for _, ti := range provides {
-					provs, _ := ti.GetPackageProvides(dep.PackageName())
-
-					for _, ver := range provs {
-
-						gprov, _ := gentoo.ParsePackageStr(
-							fmt.Sprintf("%s-%s", ver.PkgName, ver.PkgVersion))
-
-						depWithProvides := &pkg.DefaultPackage{
-							Name:     gprov.GetPN(),
-							Category: gprov.Category,
-							Version:  ver.PkgVersion,
+					for _, ver := range versions {
+						pkg2check := &pkg.DefaultPackage{
+							Name:     pruntime.Name,
+							Category: pruntime.Category,
+							Version:  ver.Version,
 						}
 
-						trees, _ := opts.ForestGuard.SearchPackage(depWithProvides)
-
-						if len(trees) == 0 {
-							continue
-						}
-
-						valid, err := pruntime.Admit(depWithProvides)
+						valid, err := pruntime.Admit(pkg2check)
 						if err != nil {
 							lastError = err
 							break
@@ -262,27 +235,70 @@ func validateRuntime(task *ValidateTask, opts *ValidateOpts,
 						break
 					}
 				}
-			}
 
-			if !depOk {
+				if !depOk {
+					// Check if the dependency is a provides
+					provides, _ := opts.ForestGuard.SearchProvides(dep)
 
-				opts.IncrBrokenDeps()
+					for _, ti := range provides {
+						provs, _ := ti.GetPackageProvides(dep.PackageName())
 
-				lastError = fmt.Errorf(
-					"[runtime] [%s] Dependency %s not found :fire:.",
-					pruntime.HumanReadableString(),
-					dep.HumanReadableString())
+						for _, ver := range provs {
 
-			} else {
+							gprov, _ := gentoo.ParsePackageStr(
+								fmt.Sprintf("%s-%s", ver.PkgName, ver.PkgVersion))
 
-				DebugC(fmt.Errorf(
-					"[runtime] [%s] Dependency %s :heavy_check_mark:",
-					pruntime.HumanReadableString(),
-					dep.HumanReadableString()))
+							depWithProvides := &pkg.DefaultPackage{
+								Name:     gprov.GetPN(),
+								Category: gprov.Category,
+								Version:  ver.PkgVersion,
+							}
+
+							trees, _ := opts.ForestGuard.SearchPackage(depWithProvides)
+
+							if len(trees) == 0 {
+								continue
+							}
+
+							valid, err := pruntime.Admit(depWithProvides)
+							if err != nil {
+								lastError = err
+								break
+							}
+							if valid {
+								depOk = true
+								// POST: This version could be used from the package.
+								break
+							}
+
+						}
+
+						if depOk {
+							break
+						}
+					}
+				}
+
+				if !depOk {
+
+					opts.IncrBrokenDeps()
+
+					lastError = fmt.Errorf(
+						"[runtime] [%s] Dependency %s not found :fire:.",
+						pruntime.HumanReadableString(),
+						dep.HumanReadableString())
+
+				} else {
+
+					DebugC(fmt.Errorf(
+						"[runtime] [%s] Dependency %s :heavy_check_mark:",
+						pruntime.HumanReadableString(),
+						dep.HumanReadableString()))
+				}
+
 			}
 
 		}
-
 	}
 
 	if lastError != nil {
