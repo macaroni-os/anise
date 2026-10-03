@@ -7,37 +7,14 @@ package specs
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"path/filepath"
 
 	pkg "github.com/macaroni-os/anise/pkg/package"
 	"github.com/macaroni-os/anise/pkg/v2/compiler/types/options"
 
-	"github.com/mitchellh/hashstructure/v2"
 	"github.com/otiai10/copy"
-	"golang.org/x/mod/sumdb/dirhash"
 	"gopkg.in/yaml.v3"
 )
-
-func (cs *CompilationSpec) signature() *Signature {
-	return &Signature{
-		Image:               cs.Image,
-		Steps:               cs.Steps,
-		PackageDir:          cs.PackageDir,
-		Prelude:             cs.Prelude,
-		Seed:                cs.Seed,
-		Env:                 cs.Env,
-		Retrieve:            cs.Retrieve,
-		Unpack:              cs.Unpack,
-		Includes:            cs.Includes,
-		Excludes:            cs.Excludes,
-		Copy:                cs.Copy,
-		Requires:            cs.Package.GetRequires(),
-		RequiresFinalImages: cs.RequiresFinalImages,
-		FlatImage:           cs.FlatImage,
-	}
-}
 
 func NewCompilationSpec(b []byte, p pkg.Package) (*CompilationSpec, error) {
 	var spec CompilationSpec
@@ -186,20 +163,6 @@ func (cs *CompilationSpec) HasImageSource() bool {
 	return (cs.Package != nil && len(cs.GetPackage().GetRequires()) != 0) || cs.GetImage() != "" || (cs.RequiresFinalImages && len(cs.Package.GetRequires()) != 0)
 }
 
-func (cs *CompilationSpec) Hash() (string, error) {
-	// build a signature, we want to be part of the hash only the fields that are relevant for build purposes
-	signature := cs.signature()
-	h, err := hashstructure.Hash(signature, hashstructure.FormatV2, nil)
-	if err != nil {
-		return "", err
-	}
-	sum, err := dirhash.HashDir(cs.Package.Path, "", dirhash.DefaultHash)
-	if err != nil {
-		return fmt.Sprint(h), err
-	}
-	return fmt.Sprint(h, sum), err
-}
-
 func (cs *CompilationSpec) CopyRetrieves(dest string) error {
 	var err error
 	if len(cs.Retrieve) > 0 {
@@ -216,68 +179,6 @@ func (cs *CompilationSpec) CopyRetrieves(dest string) error {
 		}
 	}
 	return err
-}
-
-func (cs *CompilationSpec) genDockerfile(image string, steps []string) string {
-	spec := `
-FROM ` + image + `
-COPY . /anisebuild
-WORKDIR /anisebuild
-ENV PACKAGE_NAME=` + cs.Package.GetName() + `
-ENV PACKAGE_VERSION=` + cs.Package.GetVersion() + `
-ENV PACKAGE_CATEGORY=` + cs.Package.GetCategory()
-
-	if len(cs.Retrieve) > 0 {
-		for _, s := range cs.Retrieve {
-			spec = spec + `
-ADD ` + s + ` /anisebuild/`
-		}
-	}
-
-	for _, c := range cs.Copy {
-		if c.Image != "" {
-			copyLine := fmt.Sprintf("\nCOPY --from=%s %s %s\n", c.Image, c.Source, c.Destination)
-			spec = spec + copyLine
-		}
-	}
-
-	for _, s := range cs.Env {
-		spec = spec + `
-ENV ` + s
-	}
-
-	for _, s := range steps {
-		spec = spec + `
-RUN ` + s
-	}
-	return spec
-}
-
-// RenderBuildImage renders the dockerfile of the image used as a pre-build step
-func (cs *CompilationSpec) RenderBuildImage() (string, error) {
-	return cs.genDockerfile(cs.GetSeedImage(), cs.GetPreBuildSteps()), nil
-
-}
-
-// RenderStepImage renders the dockerfile used for the image used for building the package
-func (cs *CompilationSpec) RenderStepImage(image string) (string, error) {
-	return cs.genDockerfile(image, cs.BuildSteps()), nil
-}
-
-func (cs *CompilationSpec) WriteBuildImageDefinition(path string) error {
-	data, err := cs.RenderBuildImage()
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(path, []byte(data), 0644)
-}
-
-func (cs *CompilationSpec) WriteStepImageDefinition(fromimage, path string) error {
-	data, err := cs.RenderStepImage(fromimage)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(path, []byte(data), 0644)
 }
 
 func (cs *CompilationSpec) YAML() ([]byte, error) {

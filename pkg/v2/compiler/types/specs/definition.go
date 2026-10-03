@@ -66,22 +66,4 @@ type CompilationSpecLoad struct {
 	FlatImage           bool `json:"flat_image,omitempty" yaml:"flat_image,omitempty"`
 }
 
-// Signature is a portion of the spec that yields a signature for the hash
-type Signature struct {
-	Image               string
-	Steps               []string
-	PackageDir          string
-	Prelude             []string
-	Seed                string
-	Env                 []string
-	Retrieve            []string
-	Unpack              bool
-	Includes            []string
-	Excludes            []string
-	Copy                []CopyField
-	Requires            pkg.DefaultPackages
-	RequiresFinalImages bool
-	FlatImage           bool
-}
-
 type Compilationspecs []CompilationSpec
