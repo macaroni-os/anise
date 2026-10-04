@@ -6,9 +6,11 @@ package mask
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	gentoo "github.com/geaaru/pkgs-checker/pkg/gentoo"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func NewPackageMaskFile(file string) *PackageMaskFile {
@@ -22,11 +24,49 @@ func NewPackageMaskFile(file string) *PackageMaskFile {
 
 func NewPackageMaskFileFromData(file string, data []byte) (*PackageMaskFile, error) {
 	ans := NewPackageMaskFile(file)
+	// This is needed because if the field is not present
+	// in the yaml the Unmarshal doesn't ovverride it.
+	ans.Enabled = false
 	err := yaml.Unmarshal(data, ans)
 	if err != nil {
 		return nil, err
 	}
 	return ans, nil
+}
+
+func (f *PackageMaskFile) AddRule(rule string) error {
+	p, err := gentoo.ParsePackageStr(rule)
+	if err != nil {
+		return err
+	}
+
+	f.Rules = append(f.Rules, rule)
+
+	pkgstr := f.getPkgStr(p)
+	if val, ok := f.pkgsMap[pkgstr]; ok {
+		f.pkgsMap[pkgstr] = append(val, p)
+	} else {
+		f.pkgsMap[pkgstr] = []*gentoo.GentooPackage{p}
+	}
+
+	return nil
+}
+
+func (f *PackageMaskFile) DelRule(rule string) error {
+	rules := []string{}
+	for idx := range f.Rules {
+		if f.Rules[idx] == rule {
+			continue
+		}
+		rules = append(rules, f.Rules[idx])
+	}
+
+	f.Rules = rules
+
+	// Rebuild pkg map
+	f.pkgsMap = make(map[string][]*gentoo.GentooPackage, 0)
+
+	return f.BuildMap()
 }
 
 func (f *PackageMaskFile) BuildMap() error {
@@ -86,4 +126,20 @@ func (f *PackageMaskFile) Mask(repo string, p *gentoo.GentooPackage) (bool, erro
 	// POST: The package is not masked.
 
 	return false, nil
+}
+
+func (f *PackageMaskFile) Write() error {
+
+	data, err := yaml.Marshal(f)
+	if err != nil {
+		return fmt.Errorf("error on marshal file %s: %s", f.File,
+			err.Error())
+	}
+
+	err = os.WriteFile(f.File, data, 0664)
+	if err != nil {
+		return fmt.Errorf("error on write file %s: %s", f.File,
+			err.Error())
+	}
+	return nil
 }

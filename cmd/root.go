@@ -250,6 +250,7 @@ func initCommand(rootCmd *cobra.Command, cfg *config.AniseConfig) {
 		newBoxCommand(cfg),
 		newConfigCommand(cfg),
 		newMigrateLuetCommand(cfg),
+		newMaskCommand(cfg),
 		newDatabaseCommand(cfg),
 		newExecCommand(cfg),
 		newRepoCommand(cfg),

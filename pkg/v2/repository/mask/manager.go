@@ -25,7 +25,21 @@ func NewPackagesMaskManager(c *config.AniseConfig) *PackagesMaskManager {
 	}
 }
 
+func (m *PackagesMaskManager) GetMaskFile(filename string) *PackageMaskFile {
+	for idx := range m.Files {
+		if m.Files[idx].File == filename {
+			return m.Files[idx]
+		}
+	}
+	return nil
+}
+
 func (m *PackagesMaskManager) LoadFiles() error {
+	onlyEnabledMask := true
+	return m.LoadAllFiles(onlyEnabledMask)
+}
+
+func (m *PackagesMaskManager) LoadAllFiles(enabled bool) error {
 	var regexRepo = regexp.MustCompile(`.yml$|.yaml$`)
 	var err error
 	rootfs := ""
@@ -60,14 +74,15 @@ func (m *PackagesMaskManager) LoadFiles() error {
 					continue
 				}
 
-				content, err := os.ReadFile(path.Join(mdir, file.Name()))
+				maskfile := path.Join(mdir, file.Name())
+				content, err := os.ReadFile(maskfile)
 				if err != nil {
 					Warning("On read file", file.Name(), ":", err.Error())
 					Warning("File", file.Name(), "skipped.")
 					continue
 				}
 
-				pmf, err := NewPackageMaskFileFromData(file.Name(), content)
+				pmf, err := NewPackageMaskFileFromData(maskfile, content)
 				if err != nil {
 					Warning("On parser file", file.Name(), ":", err.Error())
 					Warning("File", file.Name(), "skipped.")
@@ -75,7 +90,7 @@ func (m *PackagesMaskManager) LoadFiles() error {
 				}
 				content = nil
 
-				if !pmf.Enabled {
+				if enabled && !pmf.Enabled {
 					Debug(fmt.Sprintf(
 						"packages mask file %s is disable. Skipped.",
 						file.Name(),
