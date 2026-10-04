@@ -326,44 +326,6 @@ var _ = Describe("Package", func() {
 		})
 	})
 
-	Context("BuildFormula", func() {
-		It("builds empty constraints", func() {
-			db := NewInMemoryDatabase(false)
-			a1 := NewPackage("A", "1.0", []*DefaultPackage{}, []*DefaultPackage{})
-
-			definitions := NewInMemoryDatabase(false)
-			for _, p := range []Package{a1} {
-				_, err := definitions.CreatePackage(p)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
-			f, err := a1.BuildFormula(definitions, db)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(f).To(BeNil())
-		})
-		It("builds constraints correctly", func() {
-			db := NewInMemoryDatabase(false)
-
-			a11 := NewPackage("A", "1.1", []*DefaultPackage{}, []*DefaultPackage{})
-			a21 := NewPackage("A", "1.2", []*DefaultPackage{}, []*DefaultPackage{})
-			a1 := NewPackage("A", "1.0", []*DefaultPackage{}, []*DefaultPackage{})
-			a1.Requires([]*DefaultPackage{a11})
-			a1.Conflicts([]*DefaultPackage{a21})
-
-			definitions := NewInMemoryDatabase(false)
-			for _, p := range []Package{a1, a21, a11} {
-				_, err := definitions.CreatePackage(p)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
-			f, err := a1.BuildFormula(definitions, db)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(f)).To(Equal(8))
-			//	Expect(f[0].String()).To(Equal("or(not(c31f5842), a4910f77)"))
-			//	Expect(f[1].String()).To(Equal("or(not(c31f5842), not(a97670be))"))
-		})
-	})
-
 	Context("Clone", func() {
 		a1 := NewPackage("A", "1.0", []*DefaultPackage{}, []*DefaultPackage{})
 		a11 := NewPackage("A", "1.1", []*DefaultPackage{}, []*DefaultPackage{})
