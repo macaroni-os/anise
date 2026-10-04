@@ -42,9 +42,10 @@ var mutex sync.Mutex
 var optimusPrime *TarFormers = nil
 
 type TarFileOperation struct {
-	Rename  bool
-	NewName string
-	Skip    bool
+	Rename      bool
+	NewName     string
+	NewLinkname string
+	Skip        bool
 }
 
 // Function handler to
@@ -228,14 +229,19 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 		}
 
 		name := header.Name
+		linkName := ""
+		if header.Typeflag == tar.TypeLink {
+			linkName = header.Linkname
+		}
 
 		// Call file handler also for file that could be skipped and permit
 		// to notify this to users.
 		if t.HasFileHandler() && t.Task.IsFileTriggered(name) {
 			opts := TarFileOperation{
-				Rename:  false,
-				NewName: "",
-				Skip:    false,
+				Rename:      false,
+				NewName:     "",
+				NewLinkname: "",
+				Skip:        false,
 			}
 
 			err := t.fileHandler(name, "", header, tarReader, &opts, t)
@@ -254,14 +260,28 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 				t.Logger.Debug(fmt.Sprintf(
 					"File %s renamed in %s from reader callback.",
 					header.Name, name))
+
+				if opts.NewLinkname != "" {
+					linkName = opts.NewLinkname
+				}
 			}
 		} else {
+
 			rename := t.Task.GetRename(name)
 			// Drop initial / for header name
 			if rename[0:1] == "/" {
 				name = rename[1:]
 			} else {
 				name = rename
+			}
+			if linkName != "" {
+				rename = t.Task.GetRename(linkName)
+				// Drop initial /
+				if rename[0:1] == "/" {
+					linkName = rename[1:]
+				} else {
+					linkName = rename
+				}
 			}
 		}
 
@@ -276,9 +296,10 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 		// and permit to notify this to users
 		if t.HasFileWriterHandler() && t.TaskWriter.IsFileTriggered(name) {
 			opts := TarFileOperation{
-				Rename:  false,
-				NewName: "",
-				Skip:    false,
+				Rename:      false,
+				NewName:     "",
+				NewLinkname: "",
+				Skip:        false,
 			}
 
 			err := t.fileWriterHandler(name, fnewname, header, tarWriter, &opts, t)
@@ -296,6 +317,11 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 
 			if opts.Rename {
 				name = opts.NewName
+
+				if opts.NewLinkname != "" {
+					linkName = opts.NewLinkname
+				}
+
 			} else {
 				name = fnewname
 			}
@@ -312,6 +338,13 @@ func (t *TarFormers) HandlerTarBridgeFlow(
 			header.Name, name, header.Typeflag))
 
 		header.Name = name
+
+		if linkName != "" && header.Typeflag == tar.TypeLink {
+
+			t.Logger.Debug(fmt.Sprintf("On file %s change link %s -> %s",
+				header.Name, header.Linkname, linkName))
+			header.Linkname = linkName
+		}
 
 		// Write tar header
 		err = tarWriter.WriteHeader(header)
@@ -479,15 +512,20 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 
 		absPath := "/" + header.Name
 		targetPath := filepath.Join(dir, header.Name)
-		var name string
+		var name, linkName string
+
+		if header.Typeflag == tar.TypeLink {
+			linkName = header.Linkname
+		}
 
 		// Call file handler also for file that could be skipped and permit
 		// to notify this to users.
 		if t.HasFileHandler() && t.Task.IsFileTriggered(absPath) {
 			opts := TarFileOperation{
-				Rename:  false,
-				NewName: "",
-				Skip:    false,
+				Rename:      false,
+				NewName:     "",
+				NewLinkname: "",
+				Skip:        false,
 			}
 
 			err := t.fileHandler(absPath, dir, header, tarReader, &opts, t)
@@ -509,6 +547,9 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 				}
 
 				targetPath = filepath.Join(dir, name)
+				if opts.NewLinkname != "" {
+					linkName = opts.NewLinkname
+				}
 			} else {
 				name = header.Name
 			}
@@ -524,6 +565,16 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 			} else {
 				name = rename
 			}
+			if linkName != "" {
+				rename = t.Task.GetRename(linkName)
+				// Drop initial /
+				if rename[0:1] == "/" {
+					linkName = rename[1:]
+				} else {
+					linkName = rename
+				}
+			}
+
 		}
 
 		if t.Task.IsPath2Skip(absPath) {
@@ -562,7 +613,7 @@ func (t *TarFormers) HandleTarFlow(tarReader *tar.Reader, dir string) error {
 			links = append(links,
 				specs.Link{
 					Path:     targetPath,
-					Linkname: filepath.Join(dir, header.Linkname),
+					Linkname: filepath.Join(dir, linkName),
 					Name:     name,
 					Mode:     info.Mode(),
 					TypeFlag: header.Typeflag,

@@ -160,7 +160,7 @@ github.com/fxamacker/cbor/v2
 # github.com/geaaru/pkgs-checker v0.14.1
 ## explicit; go 1.21
 github.com/geaaru/pkgs-checker/pkg/gentoo
-# github.com/geaaru/tar-formers v0.10.5
+# github.com/geaaru/tar-formers v0.10.6
 ## explicit; go 1.26.0
 github.com/geaaru/tar-formers/pkg/executor
 github.com/geaaru/tar-formers/pkg/logger
@@ -323,8 +323,8 @@ github.com/klauspost/compress/internal/regmask
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
-# github.com/klauspost/pgzip v1.2.6
-## explicit
+# github.com/klauspost/pgzip v1.2.7
+## explicit; go 1.25
 github.com/klauspost/pgzip
 # github.com/knqyf263/go-deb-version v0.0.0-20190517075300-09fca494f03d
 ## explicit
@@ -355,7 +355,6 @@ github.com/mitchellh/copystructure
 github.com/mitchellh/go-homedir
 # github.com/mitchellh/hashstructure/v2 v2.0.1
 ## explicit; go 1.14
-github.com/mitchellh/hashstructure/v2
 # github.com/mitchellh/reflectwalk v1.0.2
 ## explicit
 github.com/mitchellh/reflectwalk
@@ -549,7 +548,6 @@ golang.org/x/crypto/scrypt
 # golang.org/x/mod v0.41.0
 ## explicit; go 1.26.0
 golang.org/x/mod/semver
-golang.org/x/mod/sumdb/dirhash
 # golang.org/x/net v0.59.0
 ## explicit; go 1.26.0
 golang.org/x/net/html
