@@ -31,7 +31,7 @@ func NewMaskAddCommand(config *cfg.AniseConfig) *cobra.Command {
 	$> anise mask add -f nodejs '>net-libs/nodejs-24.0'
 
 The filename if not with absolute path is used to write/update the file under the first
-directory defined on packages_maskdir option (for example /etc/anise/mask.conf.d/nodejs.yml else main.yml is used).
+directory defined on packages_maskdir option (for example /etc/anise/mask.d/nodejs.yml else main.yml is used).
 `,
 		Args: cobra.OnlyValidArgs,
 		PreRun: func(cmd *cobra.Command, args []string) {
