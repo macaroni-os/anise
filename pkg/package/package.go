@@ -23,7 +23,6 @@ import (
 	"github.com/macaroni-os/anise/pkg/helpers/tools"
 	version "github.com/macaroni-os/anise/pkg/versioner"
 
-	"github.com/crillab/gophersat/bf"
 	gentoo "github.com/geaaru/pkgs-checker/pkg/gentoo"
 	"github.com/ghodss/yaml"
 	"github.com/jinzhu/copier"
@@ -35,8 +34,6 @@ import (
 type Package interface {
 	Encode(PackageDatabase) (string, error)
 	Related(definitiondb PackageDatabase) Packages
-
-	BuildFormula(PackageDatabase, PackageDatabase) ([]bf.Formula, error)
 
 	GetFingerPrint() string
 	GetPackageName() string
@@ -995,179 +992,6 @@ func (p *DefaultPackage) GetRuntimePackage() (*DefaultPackage, error) {
 		r = &d
 	}
 	return r, nil
-}
-
-func (pack *DefaultPackage) buildFormula(definitiondb PackageDatabase, db PackageDatabase, visited map[string]interface{}) ([]bf.Formula, error) {
-	if _, ok := visited[pack.HumanReadableString()]; ok {
-		return nil, nil
-	}
-	visited[pack.HumanReadableString()] = true
-	p, err := definitiondb.FindPackage(pack)
-	if err != nil {
-		p = pack // Relax failures and trust the def
-	}
-	encodedA, err := p.Encode(db)
-	if err != nil {
-		return nil, err
-	}
-
-	A := bf.Var(encodedA)
-
-	var formulas []bf.Formula
-
-	// Do conflict with other packages versions (if A is selected, then conflict with other versions of A)
-	packages, _ := definitiondb.FindPackageVersions(p)
-	if len(packages) > 0 {
-		for _, cp := range packages {
-			encodedB, err := cp.Encode(db)
-			if err != nil {
-				return nil, err
-			}
-			B := bf.Var(encodedB)
-			if !p.Matches(cp) {
-				formulas = append(formulas, bf.Or(bf.Not(A), bf.Or(bf.Not(A), bf.Not(B))))
-			}
-		}
-	}
-
-	for _, requiredDef := range p.GetRequires() {
-		required, err := definitiondb.FindPackage(requiredDef)
-		if err != nil || requiredDef.IsSelector() {
-			if err == nil {
-				requiredDef = required.(*DefaultPackage)
-			}
-
-			packages, err := definitiondb.FindPackages(requiredDef)
-			if err != nil || len(packages) == 0 {
-				required = requiredDef
-			} else {
-
-				var ALO []bf.Formula // , priorityConstraints, priorityALO []bf.Formula
-
-				// Try to prio best match
-				// Force the solver to consider first our candidate (if does exists).
-				// Then builds ALO and AMO for the requires.
-				// c, candidateErr := definitiondb.FindPackageCandidate(requiredDef)
-				// var C bf.Formula
-				// if candidateErr == nil {
-				// 	// We have a desired candidate, try to look a solution with that included first
-				// 	for _, o := range packages {
-				// 		encodedB, err := o.Encode(db)
-				// 		if err != nil {
-				// 			return nil, err
-				// 		}
-				// 		B := bf.Var(encodedB)
-				// 		if !o.Matches(c) {
-				// 			priorityConstraints = append(priorityConstraints, bf.Not(B))
-				// 			priorityALO = append(priorityALO, B)
-				// 		}
-				// 	}
-				// 	encodedC, err := c.Encode(db)
-				// 	if err != nil {
-				// 		return nil, err
-				// 	}
-				// 	C = bf.Var(encodedC)
-				// 	// Or the Candidate is true, or all the others might be not true
-				// 	// This forces the CDCL sat implementation to look first at a solution with C=true
-				// 	//formulas = append(formulas, bf.Or(bf.Not(A), bf.Or(bf.And(C, bf.Or(priorityConstraints...)), bf.And(bf.Not(C), bf.Or(priorityALO...)))))
-				// 	formulas = append(formulas, bf.Or(C, bf.Or(priorityConstraints...)))
-				// }
-
-				// AMO/ALO - At most/least one
-				for _, o := range packages {
-					encodedB, err := o.Encode(db)
-					if err != nil {
-						return nil, err
-					}
-					B := bf.Var(encodedB)
-					ALO = append(ALO, B)
-					for _, i := range packages {
-						encodedI, err := i.Encode(db)
-						if err != nil {
-							return nil, err
-						}
-						I := bf.Var(encodedI)
-						if !o.Matches(i) {
-							formulas = append(formulas, bf.Or(bf.Not(A), bf.Or(bf.Not(I), bf.Not(B))))
-						}
-					}
-				}
-				formulas = append(formulas, bf.Or(bf.Not(A), bf.Or(ALO...))) // ALO - At least one
-				continue
-			}
-
-		}
-
-		encodedB, err := required.Encode(db)
-		if err != nil {
-			return nil, err
-		}
-		B := bf.Var(encodedB)
-		formulas = append(formulas, bf.Or(bf.Not(A), B))
-		r := required.(*DefaultPackage) // We know since the implementation is DefaultPackage, that can be only DefaultPackage
-		f, err := r.buildFormula(definitiondb, db, visited)
-		if err != nil {
-			return nil, err
-		}
-		formulas = append(formulas, f...)
-
-	}
-
-	for _, requiredDef := range p.GetConflicts() {
-		required, err := definitiondb.FindPackage(requiredDef)
-		if err != nil || requiredDef.IsSelector() {
-			if err == nil {
-				requiredDef = required.(*DefaultPackage)
-			}
-			packages, err := definitiondb.FindPackages(requiredDef)
-			if err != nil || len(packages) == 0 {
-				required = requiredDef
-			} else {
-				if len(packages) == 1 {
-					required = packages[0]
-				} else {
-					for _, p := range packages {
-						encodedB, err := p.Encode(db)
-						if err != nil {
-							return nil, err
-						}
-						B := bf.Var(encodedB)
-						formulas = append(formulas, bf.Or(bf.Not(A),
-							bf.Not(B)))
-						r := p.(*DefaultPackage) // We know since the implementation is DefaultPackage, that can be only DefaultPackage
-						f, err := r.buildFormula(definitiondb, db, visited)
-						if err != nil {
-							return nil, err
-						}
-						formulas = append(formulas, f...)
-					}
-					continue
-				}
-			}
-		}
-
-		encodedB, err := required.Encode(db)
-		if err != nil {
-			return nil, err
-		}
-		B := bf.Var(encodedB)
-		formulas = append(formulas, bf.Or(bf.Not(A),
-			bf.Not(B)))
-
-		r := required.(*DefaultPackage) // We know since the implementation is DefaultPackage, that can be only DefaultPackage
-		f, err := r.buildFormula(definitiondb, db, visited)
-		if err != nil {
-			return nil, err
-		}
-		formulas = append(formulas, f...)
-
-	}
-
-	return formulas, nil
-}
-
-func (pack *DefaultPackage) BuildFormula(definitiondb PackageDatabase, db PackageDatabase) ([]bf.Formula, error) {
-	return pack.buildFormula(definitiondb, db, make(map[string]interface{}))
 }
 
 func (p *DefaultPackage) Explain() {
