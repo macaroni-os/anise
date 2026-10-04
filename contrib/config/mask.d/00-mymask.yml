@@ -5,10 +5,10 @@ enabled: true
 # The rules are in the Gentoo/Funtoo format
 rules:
   # Hidden the package test/b with version >=1.0
-  - >=test/b-1.0
+  - '>=test/b-1.0'
   # Hidden the package test/c with version 2.0
-  - =test/c-2.0
+  - '=test/c-2.0'
   # Hidden the package test/e with version <3.0
-  - <test/e-3.0
+  - '<test/e-3.0'
   # Hidden the package test/g with version 2.0 from repos main
-  - test/g-2.0::main
+  - 'test/g-2.0::main'
