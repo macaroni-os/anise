@@ -486,24 +486,12 @@ func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtim
 
 	for _, treePath := range treePaths {
 		Info(fmt.Sprintf(":deciduous_tree: Loading %s...", treePath))
-		// Load singular path for time to improve user messages
-		tIdx := tree.NewTreeIdx(treePath, true)
 
-		if tIdx.HasIndex() {
-			err = tIdx.DetectMode().Read(treePath)
-		} else {
-			Warning("Tree without index. Run `anise-build tree genidx`. Trying to generate indexes in memory")
-			err = tIdx.Generate(treePath,
-				&tree.GenOpts{
-					DryRun:   false,
-					OnlyMain: true,
-				})
-		}
+		// Load single path for time to improve user messages
+		err := opts.ForestGuard.LoadTrees([]string{treePath})
 		if err != nil {
 			Fatal(err.Error())
 		}
-
-		opts.ForestGuard.Trees = append(opts.ForestGuard.Trees, tIdx)
 	}
 
 	opts.RegExcludes, err = helpers.CreateRegexArray(opts.Excludes)
