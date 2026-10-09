@@ -207,12 +207,26 @@ func NewPackageArtifactFromJson(data []byte) (*PackageArtifact, error) {
 }
 
 func (a *PackageArtifact) GetPackage() *pkg.DefaultPackage {
+	var ans *pkg.DefaultPackage = nil
+
 	if a.Runtime != nil {
-		return a.Runtime
+		ans = a.Runtime.Clone().(*pkg.DefaultPackage)
 	} else if a.CompileSpec != nil && a.CompileSpec.Package != nil {
-		return a.CompileSpec.Package
+		ans = a.CompileSpec.Package.Clone().(*pkg.DefaultPackage)
+
+		// Add copy entry as dependencies
+		if len(a.CompileSpec.Copy) > 0 {
+			for idx := range a.CompileSpec.Copy {
+
+				if a.CompileSpec.Copy[idx].Package != nil {
+					ans.PackageRequires = append(ans.PackageRequires,
+						a.CompileSpec.Copy[idx].Package.Clone().(*pkg.DefaultPackage),
+					)
+				}
+			}
+		}
 	}
-	return nil
+	return ans
 }
 
 func (a *PackageArtifact) GetPackageTreePath(treefs string) string {
