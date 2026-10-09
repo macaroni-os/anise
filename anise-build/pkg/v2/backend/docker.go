@@ -573,18 +573,7 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 	}
 
 	buildImage := true
-
-	// TODO: Fix support of different PullImageRepository/PushImageRepository
-	if opts.PullFirst {
-		err := d.PullImage(art, opts, remotetaggedImage)
-		if err == nil {
-			buildImage = false
-		} else {
-			Warning("Failed to download '" + remotetaggedImage +
-				"'. Will keep going and build the image unless you use --fatal")
-			Warning(err.Error())
-		}
-	}
+	pulledImage := false
 
 	// Check if the image is already present locally
 	isAvailable, err := d.HasLocalTaggedImage(remotetaggedImage)
@@ -593,6 +582,19 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		Warning(err.Error())
 	} else if isAvailable {
 		buildImage = false
+	}
+
+	// TODO: Fix support of different PullImageRepository/PushImageRepository
+	if opts.PullFirst && buildImage {
+		err := d.PullImage(art, opts, remotetaggedImage)
+		if err == nil {
+			buildImage = false
+			pulledImage = true
+		} else {
+			Warning("Failed to download '" + remotetaggedImage +
+				"'. Will keep going and build the image unless you use --fatal")
+			Warning(err.Error())
+		}
 	}
 
 	if buildImage {
@@ -625,7 +627,7 @@ func (d *Dockerv3) CreateFinalImage(art *artifact.PackageArtifact,
 		}
 	}
 
-	if opts.Push {
+	if opts.Push && !pulledImage {
 		err = d.PushImage(art, remotetaggedImage)
 		if err != nil {
 			return err
