@@ -207,15 +207,12 @@ func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
 
 	dockerSteps := ""
 
-	// TODO: resolve hash from dependency.
 	if art.CompileSpec.Image != "" {
 		// POST: We use defined image for build
-
 		dockerSteps = fmt.Sprintf("FROM %s", art.CompileSpec.Image)
-
 	}
 
-	if len(art.GetPackage().GetRequires()) > 0 {
+	if art.CompileSpec.Package != nil && len(art.CompileSpec.Package.GetRequires()) > 0 {
 
 		// NOTE: I consider that all dependencies are elaborated
 		//       before this package. This means that all artefacts
@@ -224,7 +221,7 @@ func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
 
 		solutionMap := solution.ToMap()
 
-		for idx, art := range art.GetPackage().GetRequires() {
+		for idx, art := range art.CompileSpec.Package.GetRequires() {
 
 			// Retrieve artefact from solution to retrieves
 			// all hashes.
@@ -233,7 +230,7 @@ func (d *Dockerv3) createBuildDockerfile(art *artifact.PackageArtifact,
 				return err
 			}
 
-			if idx == 0 {
+			if idx == 0 && dockerSteps == "" {
 				dockerSteps += fmt.Sprintf("FROM %s:%s",
 					opts.PushImageRepository,
 					deps[0].GetFinalImageHash())
