@@ -35,7 +35,7 @@ func NewRenderEngine(cfg *config.AniseConfig) *RenderEngine {
 	return &RenderEngine{
 		Config:            cfg,
 		Templates:         []*chart.File{},
-		MetadataNamespace: "",
+		MetadataNamespace: "tpl",
 		Values:            make(map[string]interface{}, 0),
 		DefValues:         make(map[string]interface{}, 0),
 	}
