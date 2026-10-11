@@ -256,6 +256,7 @@ func initCommand(rootCmd *cobra.Command, cfg *config.AniseConfig) {
 		newRepoCommand(cfg),
 		newUpgradeCommand(cfg),
 		newSearchCommand(cfg),
+		newSecurityCommand(cfg),
 		newSubsetsCommand(cfg),
 		newCleanupCommand(cfg),
 		newQueryCommand(cfg),
