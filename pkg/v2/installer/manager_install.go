@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/logrusorgru/aurora"
 	. "github.com/macaroni-os/anise/pkg/logger"
 	pkg "github.com/macaroni-os/anise/pkg/package"
 	artifact "github.com/macaroni-os/anise/pkg/v2/compiler/types/artifact"
 	wagon "github.com/macaroni-os/anise/pkg/v2/repository"
 	solver "github.com/macaroni-os/anise/pkg/v2/solver"
 
+	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
 )
 
