@@ -198,6 +198,14 @@ func (bm *BuildManager) Build(
 
 		ptask, _ := tasksMap[pkgstr]
 
+		// Load solution artefacts on ans if not already elaborated
+		for _, p := range ptask.Solution.Artifacts {
+			elabp, _ := elaboratedPkgsMap.MatchVersion(p)
+			if elabp == nil {
+				ans.Artifacts = append(ans.Artifacts, p)
+			}
+		}
+
 		err = bm.buildPackageTask(ptask, ptask.Solution,
 			elaboratedPkgsMap, opts,
 			destination,
@@ -208,8 +216,6 @@ func (bm *BuildManager) Build(
 		}
 
 	}
-
-	ans.Artifacts = *elaboratedPkgsMap.ToList()
 
 	return ans, nil
 }
