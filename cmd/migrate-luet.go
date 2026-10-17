@@ -95,6 +95,20 @@ func newMigrateLuetCommand(cfg *config.AniseConfig) *cobra.Command {
 
 				// Try to remove also /etc/anise/luet.yaml link
 				os.RemoveAll("/etc/anise/luet.yaml")
+			} else {
+				// Copy config.protect.d directory if present
+
+				if fileHelper.Exists("/etc/luet/config.protect.d") {
+					err := fileHelper.CopyDir(
+						"/etc/luet/config.protect.d",
+						"/etc/anise/config.protect.d",
+					)
+					if err != nil {
+						Fatal(fmt.Sprintf(
+							"error on copy directory /etc/luet/config.protect.d: %s",
+							err.Error()))
+					}
+				}
 			}
 
 			err := updateRepositoriesPkgs(cfg)
