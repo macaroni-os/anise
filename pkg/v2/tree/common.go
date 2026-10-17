@@ -92,6 +92,29 @@ func (t *TreeIdx) HasIndex() bool {
 	return ans
 }
 
+func (t *TreeIdx) PurgeIndex(recursive bool) error {
+	var err error
+
+	if t.TreePath == "" {
+		return errors.New("Invalid tree directory")
+	}
+
+	treeDir := t.TreePath
+	if treeDir[len(treeDir)-1:len(treeDir)] == "/" {
+		treeDir = treeDir[0 : len(treeDir)-1]
+	}
+
+	if !filepath.IsAbs(treeDir) {
+		treeDir, err = filepath.Abs(treeDir)
+		if err != nil {
+			return err
+		}
+	}
+	base := filepath.Dir(treeDir)
+
+	return t.purgeIdxDir(treeDir, base, recursive)
+}
+
 func (t *TreeIdx) AddPackage(name string, p *TreeIdxPkg) {
 	if v, ok := t.Map[name]; ok {
 		t.Map[name] = append(v, p)
@@ -278,6 +301,41 @@ func (t *TreeIdx) Generate(treeDir string, opts *GenOpts) error {
 	t.Merge(tm)
 
 	t.BaseDir, _ = filepath.Rel(treeDir, base)
+	return nil
+}
+
+func (t *TreeIdx) purgeIdxDir(dir, base string, recursive bool) error {
+	tt := NewTreeIdx(dir, t.Compress)
+
+	if tt.HasIndex() {
+		f := filepath.Join(tt.TreePath, IDX_FILE)
+		if !fileHelper.Exists(f) {
+			f = f + ".zstd"
+		}
+		DebugC("Removing index file", f)
+		err := os.RemoveAll(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	if recursive {
+		dirEntries, err := os.ReadDir(dir)
+		if err != nil {
+			return fmt.Errorf("error on readdir %s: %s", dir, err.Error())
+		}
+
+		for _, file := range dirEntries {
+			f := filepath.Join(dir, file.Name())
+			if file.IsDir() {
+				err := t.purgeIdxDir(f, base, recursive)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
