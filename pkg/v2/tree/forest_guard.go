@@ -34,20 +34,22 @@ func NewForestGuard(config *cfg.AniseConfig) *ForestGuard {
 func (fg *ForestGuard) GetTrees() []*TreeIdx        { return fg.Trees }
 func (fg *ForestGuard) GetConfig() *cfg.AniseConfig { return fg.Config }
 
-func (fg *ForestGuard) LoadTrees(tpaths []string) error {
+func (fg *ForestGuard) LoadTrees(tpaths []string, forceGeneration bool) error {
 	var err error
 
 	for _, t := range tpaths {
 
 		tIdx := NewTreeIdx(t, true)
 
-		if tIdx.HasIndex() {
+		if !forceGeneration && tIdx.HasIndex() {
 			err = tIdx.DetectMode().Read(t)
 		} else {
-			Warning(fmt.Sprintf(
-				"Tree %s without index. Run `anise-build tree genidx`. Trying to generate indexes in memory.",
-				t,
-			))
+			if !forceGeneration {
+				Warning(fmt.Sprintf(
+					"Tree %s without index. Run `anise-build tree genidx`. Trying to generate indexes in memory.",
+					t,
+				))
+			}
 			err = tIdx.Generate(t,
 				&GenOpts{
 					DryRun:   true,

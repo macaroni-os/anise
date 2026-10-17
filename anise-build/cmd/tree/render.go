@@ -58,7 +58,7 @@ func NewTreeRender(config *cfg.AniseConfig) *cobra.Command {
 
 			// Load the index file
 			forestGuard := tree.NewForestGuard(config)
-			err = forestGuard.LoadTrees(treePaths)
+			err = forestGuard.LoadTrees(treePaths, false)
 			if err != nil {
 				Fatal("fail to read tree indexes:", err.Error())
 			}

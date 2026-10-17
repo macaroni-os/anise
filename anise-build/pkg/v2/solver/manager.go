@@ -46,7 +46,7 @@ func (bm *BuildManager) PrepareSolver(stype string,
 
 	// Load the index file
 	forestGuard := tree.NewForestGuard(bm.Config)
-	err := forestGuard.LoadTrees(tpaths)
+	err := forestGuard.LoadTrees(tpaths, false)
 	if err != nil {
 		return fmt.Errorf("error on read tree indexes: %s", err.Error())
 	}

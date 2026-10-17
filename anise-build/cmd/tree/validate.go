@@ -488,7 +488,7 @@ func initOpts(config *AniseConfig, opts *ValidateOpts, onlyRuntime, onlyBuildtim
 		Info(fmt.Sprintf(":deciduous_tree: Loading %s...", treePath))
 
 		// Load single path for time to improve user messages
-		err := opts.ForestGuard.LoadTrees([]string{treePath})
+		err := opts.ForestGuard.LoadTrees([]string{treePath}, false)
 		if err != nil {
 			Fatal(err.Error())
 		}
