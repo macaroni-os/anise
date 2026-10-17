@@ -21,7 +21,6 @@ type Compiler struct {
 	CompressionType     tarf_tools.CompressionMode `json:"compression_type,omitempty" yaml:"compression_type,omitempty"`
 
 	PackageTargetOnly bool `json:"package_targetonly,omitempty" yaml:"package_targetonly,omitempty"`
-	Rebuild           bool `json:"rebuild,omitempty" yaml:"rebuild,omitempty"`
 
 	BackendArgs []string `json:"backend_args,omitempty" yaml:"backend_args,omitempty"`
 	BackendType string   `json:"backend_type,omitempty" yaml:"backend_type,omitempty"`
@@ -37,7 +36,6 @@ func NewDefaultCompiler() *Compiler {
 		Concurrency:         runtime.NumCPU(),
 		BackendType:         "dockerv3",
 		BackendArgs:         []string{},
-		Rebuild:             false,
 	}
 }
 
@@ -103,13 +101,6 @@ func PullFirst(b bool) func(cfg *Compiler) error {
 func KeepImg(b bool) func(cfg *Compiler) error {
 	return func(cfg *Compiler) error {
 		cfg.KeepImg = b
-		return nil
-	}
-}
-
-func Rebuild(b bool) func(cfg *Compiler) error {
-	return func(cfg *Compiler) error {
-		cfg.Rebuild = b
 		return nil
 	}
 }
