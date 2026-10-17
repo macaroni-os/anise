@@ -35,14 +35,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 
 		$ anise-build build --all
 
-	Builds only the leaf packages:
-
-		$ anise-build build --full
-
-	Build package revdeps:
-
-		$ anise-build build --revdeps utils/yq
-
 	Build package without dependencies (needs the images already in the host, or either need to be available online):
 
 		$ anise-build build --nodeps utils/yq ...
@@ -55,7 +47,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 			config.Viper.BindPFlag("destination", cmd.Flags().Lookup("destination"))
 			config.Viper.BindPFlag("backend", cmd.Flags().Lookup("backend"))
 			config.Viper.BindPFlag("privileged", cmd.Flags().Lookup("privileged"))
-			config.Viper.BindPFlag("revdeps", cmd.Flags().Lookup("revdeps"))
 			config.Viper.BindPFlag("all", cmd.Flags().Lookup("all"))
 			config.Viper.BindPFlag("compression", cmd.Flags().Lookup("compression"))
 			config.Viper.BindPFlag("nodeps", cmd.Flags().Lookup("nodeps"))
@@ -89,7 +80,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 			concurrency := config.GetGeneral().Concurrency
 			backendType := config.Viper.GetString("backend")
 			privileged := config.Viper.GetBool("privileged")
-			//revdeps := config.Viper.GetBool("revdeps")
 			//all := config.Viper.GetBool("all")
 			compressionType := config.Viper.GetString("compression")
 			imageRepository := config.Viper.GetString("image-repository")
@@ -100,8 +90,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 			//nodeps := config.Viper.GetBool("nodeps")
 			//onlydeps := config.Viper.GetBool("onlydeps")
 			onlyTarget, _ := cmd.Flags().GetBool("only-target-package")
-			//full, _ := cmd.Flags().GetBool("full")
-			rebuild, _ := cmd.Flags().GetBool("rebuild")
 			backendArgs := config.Viper.GetStringSlice("backend-args")
 
 			out, _ := cmd.Flags().GetString("output")
@@ -113,7 +101,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 				Bold(Blue("Anise Build")), Bold(Blue(util.Version()))))
 
 			pretend, _ := cmd.Flags().GetBool("pretend")
-			//fromRepo, _ := cmd.Flags().GetBool("from-repositories")
 
 			buildManager := solver.NewBuildManager(config)
 
@@ -147,7 +134,6 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 					options.Concurrency(concurrency),
 					options.WithCompressionType(compressionType),
 					options.OnlyTarget(onlyTarget),
-					options.Rebuild(rebuild),
 					options.BackendArgs(backendArgs),
 					options.WithBackendType(backendType),
 				)
@@ -230,9 +216,7 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 
 	flags.String("backend", "docker", "backend used (docker,img)")
 	flags.Bool("privileged", true, "Privileged (Keep permissions)")
-	flags.Bool("revdeps", false, "Build with revdeps")
-	flags.Bool("all", false, "Build all specfiles in the tree")
-	flags.Bool("full", false, "Build all packages (optimized)")
+	flags.Bool("all", false, "Build all packages in the tree")
 	flags.StringSlice("values", []string{}, "Build values file to interpolate with each package")
 	flags.StringSliceP("backend-args", "a", []string{}, "Backend args")
 
@@ -246,9 +230,7 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 	flags.Bool("onlydeps", false, "Build only package dependencies")
 	flags.Bool("only-target-package", false, "Build packages of only the required target. Otherwise builds all the necessary ones not present in the destination")
 	flags.Bool("live-output", config.GetGeneral().ShowBuildOutput, "Enable live output of the build phase.")
-	flags.Bool("rebuild", false, "To combine with --pull. Allows to rebuild the target package even if an image is available, against a local values file")
 	flags.StringArrayP("pull-repository", "p", []string{}, "A list of repositories to pull the cache from")
-	//flags.Bool("from-repositories", false, "Consume the user-defined repositories to pull specfiles from")
 
 	return buildCmd
 }
