@@ -61,6 +61,7 @@ func NewSecurityCheckCommand(config *cfg.AniseConfig) *cobra.Command {
 			out, _ := cmd.Flags().GetString("output")
 			verbose, _ := cmd.Flags().GetBool("verbose")
 			all, _ := cmd.Flags().GetBool("all")
+			force, _ := cmd.Flags().GetBool("force")
 			ignoreRules, _ := cmd.Flags().GetStringSlice("exclude")
 
 			if out != "terminal" {
@@ -91,6 +92,7 @@ func NewSecurityCheckCommand(config *cfg.AniseConfig) *cobra.Command {
 				WithSubsets: true,
 				Verbose:     verbose,
 				IgnoreRules: ignoreRules,
+				ForceFetch:  force,
 			}
 
 			if all {
@@ -148,6 +150,7 @@ func NewSecurityCheckCommand(config *cfg.AniseConfig) *cobra.Command {
 		"Output format ( Defaults: terminal, available: json,yaml )")
 	flags.Bool("verbose", false, "Increase verbosity for terminal output.")
 	flags.Bool("all", false, "Check all installed packages.")
+	flags.Bool("force", false, "Force download of metadata also if present on local cache.")
 	flags.StringSliceP("exclude", "e", []string{},
 		"Add exclude rules on check packages. For example for *.pyc, etc.")
 

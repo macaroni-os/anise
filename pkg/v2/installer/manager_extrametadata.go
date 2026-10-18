@@ -30,6 +30,7 @@ type CheckOpts struct {
 	Verbose     bool
 	WithSubsets bool
 	IgnoreRules []string
+	ForceFetch  bool
 }
 
 type CheckResult struct {
@@ -169,7 +170,7 @@ func (m *ArtifactsManager) integrityCheckPackages(opts *CheckOpts,
 		}
 
 		err := m.DownloadPackageExtraMetadata(
-			artefacts2Check[idx], wr, false,
+			artefacts2Check[idx], wr, opts.ForceFetch,
 		)
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
