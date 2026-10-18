@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	pkg "github.com/macaroni-os/anise/pkg/package"
 	spectooling "github.com/macaroni-os/anise/pkg/spectooling"
@@ -31,6 +32,37 @@ func ReadDefinitionFile(defFile string) (*pkg.DefaultPackage, error) {
 	}
 
 	return ans, nil
+}
+
+func ReadDefinitionFromCollection(cFile string, atom *pkg.DefaultPackage) (*pkg.DefaultPackage, error) {
+
+	if filepath.Base(cFile) == "definition.yaml" {
+		return nil, fmt.Errorf(
+			"trying to read collection file but definition.yaml available for package %s",
+			atom.PackageName())
+	}
+
+	// Read data an
+	data, err := os.ReadFile(cFile)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"Error on read file %s: %s",
+			cFile, err.Error())
+	}
+
+	coll, err := NewCollection(&data)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"error on parse collection data: %s", err.Error())
+	}
+
+	for idx := range coll.Packages {
+		if coll.Packages[idx].Matches(atom) {
+			return &coll.Packages[idx], nil
+		}
+	}
+
+	return nil, fmt.Errorf("Package %s not found on collection", atom.HumanReadableString())
 }
 
 func ReadDefinitionFileAsMap(defFile string) (*map[string]interface{}, error) {
