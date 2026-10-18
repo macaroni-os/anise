@@ -54,6 +54,20 @@ type TarReaderCompressionOpts struct {
 	FileReader     io.ReadCloser
 }
 
+func (c *CompressionMode) Ext() (ans string) {
+	switch *c {
+	case Gzip:
+		ans = ".gz"
+	case Zstd:
+		ans = ".zst"
+	case Xz:
+		ans = ".xz"
+	case Bzip2:
+		ans = ".bz2"
+	}
+	return
+}
+
 func ParseCompressionMode(s string) CompressionMode {
 	ans := None
 
