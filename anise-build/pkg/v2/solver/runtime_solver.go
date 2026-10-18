@@ -175,7 +175,7 @@ func (s *RuntimeSolver) resolvePackage(ptask *PackageTask, stack []string) (*art
 	}
 
 	// Check if the package has dependencies to recursively resolve
-	if len(runtimePackage.GetRequires()) > 0 {
+	if len(runtimePackage.GetRequires()) > 0 && !s.Opts.NoDeps {
 
 		for _, dep := range runtimePackage.GetRequires() {
 
