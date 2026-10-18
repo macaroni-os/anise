@@ -813,7 +813,7 @@ func (d *Dockerv3) GeneratePackage(art *artifact.PackageArtifact,
 	art.Path = filepath.Join(builddir, art.GetPackage().GetFingerPrint()+".package.tar")
 	art.CompressionType = opts.CompressionType
 	if art.CompressionType != tarf_tools.None {
-		art.Path += "." + string(art.CompressionType)
+		art.Path += art.CompressionType.Ext()
 	}
 
 	// Extract files from the tagged image.
