@@ -46,6 +46,7 @@ type ValidateOpts struct {
 	WithSolver    bool
 	OnlyRuntime   bool
 	OnlyBuildtime bool
+	NoDeps        bool
 	RegExcludes   []*regexp.Regexp
 	RegMatches    []*regexp.Regexp
 	Excludes      []string
@@ -184,6 +185,7 @@ func validateRuntime(task *ValidateTask, opts *ValidateOpts,
 	var lastError error
 
 	runtimeOpts := solver.NewRuntimeSolverOpts()
+	runtimeOpts.NoDeps = opts.NoDeps
 	s := solver.NewRuntimeSolver(opts.Config, runtimeOpts)
 
 	// Setup the forest guard for the solver
@@ -544,9 +546,11 @@ func NewTreeValidateCommand(config *AniseConfig) *cobra.Command {
 			withSolver, _ := cmd.Flags().GetBool("with-solver")
 			onlyRuntime, _ := cmd.Flags().GetBool("only-runtime")
 			onlyBuildtime, _ := cmd.Flags().GetBool("only-buildtime")
+			noDeps, _ := cmd.Flags().GetBool("nodeps")
 			templatesDirs := config.Viper.GetStringSlice("templates-dir")
 			values := helpers.ValuesFlags()
 
+			opts.NoDeps = noDeps
 			opts.Excludes = excludes
 			opts.Matches = matches
 			opts.RenderValues = values
@@ -623,6 +627,7 @@ func NewTreeValidateCommand(config *AniseConfig) *cobra.Command {
 	}
 	ans.Flags().Bool("only-runtime", false, "Check only runtime dependencies.")
 	ans.Flags().Bool("only-buildtime", false, "Check only buildtime dependencies.")
+	ans.Flags().Bool("nodeps", false, "With solver avoid to process dependencies. Development flag.")
 	ans.Flags().BoolP("with-solver", "s", false,
 		"Enable check of requires also with solver. Only for buildtime.")
 	ans.Flags().StringSliceVarP(&treePaths, "tree", "t", []string{path},
