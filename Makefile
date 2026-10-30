@@ -57,7 +57,7 @@ deps:
 	go env
 	# Installing dependencies...
 	GO111MODULE=on go install -mod=mod golang.org/x/lint/golint
-	GOBIN=$(GOBIN) go install github.com/onsi/ginkgo/v2/ginkgo
+	GOBIN=$(GOBIN) go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo
 	$(GINKGO) version
 
 .PHONY: build
