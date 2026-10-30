@@ -10,6 +10,9 @@ PACKAGE_NAME ?= $(NAME)
 PACKAGE_CONFLICT ?= $(PACKAGE_NAME)-beta
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
+GOBIN := $(shell go env GOPATH)/bin/
+GINKGO := $(GOBIN)/ginkgo
+
 .PHONY: all
 all: deps build
 
@@ -21,7 +24,7 @@ fmt:
 test:
 	GO111MODULE=off go get github.com/onsi/ginkgo/v2/ginkgo
 	GO111MODULE=off go get github.com/onsi/gomega/...
-	ginkgo -race -r -flake-attempts 3 ./...
+	$(GINKGO) -race -r -flake-attempts 3 ./...
 
 .PHONY: test-integration
 test-integration:
@@ -54,10 +57,8 @@ deps:
 	go env
 	# Installing dependencies...
 	GO111MODULE=on go install -mod=mod golang.org/x/lint/golint
-	#GO111MODULE=off go get github.com/mitchellh/gox
-	GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo
-	go get github.com/onsi/gomega/...
-	ginkgo version
+	GOBIN=$(GOBIN) go install github.com/onsi/ginkgo/v2/ginkgo
+	$(GINKGO) version
 
 .PHONY: build
 build:
