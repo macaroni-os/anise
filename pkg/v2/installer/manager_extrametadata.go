@@ -267,7 +267,7 @@ func (m *ArtifactsManager) checkPackageFiles(
 		}
 
 		// Skip file not selected by subsets
-		tocheck := analyzer.IsSelected(fIdentity.Name)
+		tocheck := analyzer.IsSelected(filepath.Join("/", fIdentity.Name))
 		if !tocheck {
 			ans.SkippedFiles++
 			continue
