@@ -36,6 +36,7 @@ func NewTreeRender(config *cfg.AniseConfig) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			treePaths, _ := cmd.Flags().GetStringArray("tree")
 			templatesDirs, _ := cmd.Flags().GetStringArray("templates-dir")
+			defaultValues, _ := cmd.Flags().GetStringSlice("default-values")
 			output, _ := cmd.Flags().GetString("output")
 			values := bhelpers.ValuesFlags()
 			pkgstr := args[0]
@@ -51,9 +52,14 @@ func NewTreeRender(config *cfg.AniseConfig) *cobra.Command {
 				Fatal("fail to load render templates dirs:", err.Error())
 			}
 
-			err = rEngine.LoadDefaultValues(values)
+			err = rEngine.LoadDefaultValues(defaultValues)
 			if err != nil {
 				Fatal("fail to load render default values:", err.Error())
+			}
+
+			err = rEngine.LoadValues(values)
+			if err != nil {
+				Fatal("fail to load render devalues:", err.Error())
 			}
 
 			// Load the index file
@@ -154,6 +160,8 @@ func NewTreeRender(config *cfg.AniseConfig) *cobra.Command {
 	flags.StringArrayP("tree", "t", []string{path},
 		"Path of the tree to use.")
 	flags.StringSlice("values", []string{}, "Build values file to interpolate with each package")
+	flags.StringSlice("default-values", []string{},
+		"Build default values file to interpolate with each package")
 	flags.StringArray("templates-dir", []string{filepath.Join(path, "templates")},
 		"Path of the render templates to use.")
 	ans.Flags().StringP("output", "o", "terminal",
