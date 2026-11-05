@@ -72,6 +72,7 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 
 			treePaths := config.Viper.GetStringSlice("tree")
 			templatesDirs := config.Viper.GetStringSlice("templates-dir")
+			defaultValues, _ := cmd.Flags().GetStringSlice("default-values")
 			values := bhelpers.ValuesFlags()
 
 			stype, _ := cmd.Flags().GetString("solver-type")
@@ -109,7 +110,9 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 
 			err = buildManager.PrepareSolver(
 				stype, opts, treePaths,
-				templatesDirs, values)
+				templatesDirs, values,
+				defaultValues,
+			)
 			if err != nil {
 				Fatal(err)
 			}
@@ -218,6 +221,8 @@ func newBuildCommand(config *cfg.AniseConfig) *cobra.Command {
 	flags.Bool("privileged", true, "Privileged (Keep permissions)")
 	flags.Bool("all", false, "Build all packages in the tree")
 	flags.StringSlice("values", []string{}, "Build values file to interpolate with each package")
+	flags.StringSlice("default-values", []string{},
+		"Build default values file to interpolate with each package")
 	flags.StringSliceP("backend-args", "a", []string{}, "Backend args")
 
 	flags.String("destination", filepath.Join(path, "build"), "Destination folder")
