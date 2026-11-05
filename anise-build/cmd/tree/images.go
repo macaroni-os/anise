@@ -60,7 +60,7 @@ func NewTreeImageCommand(config *AniseConfig) *cobra.Command {
 			treePath, _ := cmd.Flags().GetStringArray("tree")
 			imageRepository := viper.GetString("image-repository")
 			backendType, _ := cmd.Flags().GetString("backend")
-			//pullRepo, _ := cmd.Flags().GetStringArray("pull-repository")
+			defaultValues, _ := cmd.Flags().GetStringSlice("default-values")
 			values := bhelpers.ValuesFlags()
 			templatesDirs := config.Viper.GetStringSlice("templates-dir")
 			stype := ""
@@ -75,7 +75,8 @@ func NewTreeImageCommand(config *AniseConfig) *cobra.Command {
 
 			err := buildManager.PrepareSolver(
 				stype, opts, treePath,
-				templatesDirs, values)
+				templatesDirs, values,
+				defaultValues)
 			if err != nil {
 				Fatal(err)
 			}
@@ -165,6 +166,9 @@ func NewTreeImageCommand(config *AniseConfig) *cobra.Command {
 	if err != nil {
 		Fatal(err)
 	}
+
+	ans.Flags().StringSlice("default-values", []string{},
+		"Build default values file to interpolate with each package")
 	ans.Flags().String("backend", "dockerv3", "backend used (docker)")
 	ans.Flags().StringP("output", "o", "terminal", "Output format ( Defaults: terminal, available: json,yaml )")
 	ans.Flags().StringArrayP("tree", "t", []string{path}, "Path of the tree to use.")
