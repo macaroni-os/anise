@@ -38,8 +38,7 @@ func (bm *BuildManager) GetSolver() BuilderSolver    { return bm.Solver }
 func (bm *BuildManager) PrepareSolver(stype string,
 	opts *BuildSolverOpts,
 	tpaths []string,
-	templatesDirs []string,
-	renderValues []string) error {
+	templatesDirs, renderValues, renderDefaults []string) error {
 
 	s := NewBuildSolverImplementation(stype, bm.Config, opts)
 	bm.Solver = *s
@@ -61,9 +60,14 @@ func (bm *BuildManager) PrepareSolver(stype string,
 		return fmt.Errorf("fail to load render templates dirs: %s", err.Error())
 	}
 
-	err = rEngine.LoadDefaultValues(renderValues)
+	err = rEngine.LoadDefaultValues(renderDefaults)
 	if err != nil {
 		return fmt.Errorf("fail to load render default values: %s", err.Error())
+	}
+
+	err = rEngine.LoadValues(renderValues)
+	if err != nil {
+		return fmt.Errorf("fail to load render values: %s", err.Error())
 	}
 
 	bm.Solver.SetRenderEngine(rEngine)
