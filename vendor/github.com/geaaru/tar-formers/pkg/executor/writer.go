@@ -42,6 +42,14 @@ func (t *TarFormers) InjectFile2Writer(tw *tar.Writer,
 	s := *stat
 	imap := *iMap
 
+	// Sockets cannot be represented in a tar archive and
+	// tar.FileInfoHeader returns an error for them. Skip them instead of
+	// aborting the whole archive flow (GNU tar ignores sockets as well).
+	if s.Mode()&fs.ModeSocket != 0 {
+		t.Logger.Debug(fmt.Sprintf("Skipping socket %s", file))
+		return nil
+	}
+
 	if fnewname == "" {
 		fnewname = file
 	}
@@ -169,6 +177,11 @@ func (t *TarFormers) InjectFile2Writer(tw *tar.Writer,
 		))
 		return nil
 
+	case tar.TypeFifo, tar.TypeChar, tar.TypeBlock:
+		// These entries have no data payload: their header only describes
+		// the inode type. Opening a FIFO for reading blocks until a writer
+		// opens the other end, which would hang the whole archive flow.
+		return nil
 	}
 
 	f, err := os.Open(file)
