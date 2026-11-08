@@ -25,6 +25,13 @@ func ReadBuildFile(buildFile, definitionFile string,
 
 	pkgEngine := engine.CloneWithoutValues()
 
+	// Merge engine values if defined.
+	if len(engine.Values) > 0 {
+		for k, v := range engine.Values {
+			pkgEngine.Values[k] = v
+		}
+	}
+
 	if filepath.Base(definitionFile) == "definition.yaml" {
 		err := pkgEngine.LoadValues([]string{definitionFile})
 		if err != nil {
@@ -111,7 +118,20 @@ func ReadBuildFileFromCollection(buildFile, cFile string,
 		return nil, err
 	}
 
-	pkgEngine.Values = *values
+	// Merge engine values if defined.
+	if len(engine.Values) > 0 {
+		for k, v := range engine.Values {
+			pkgEngine.Values[k] = v
+		}
+	}
+
+	// Merge package values
+	if len(*values) > 0 {
+		for k, v := range *values {
+			pkgEngine.Values[k] = v
+		}
+	}
+
 	cRender = nil
 
 	collection, err := NewCollection(&data)
