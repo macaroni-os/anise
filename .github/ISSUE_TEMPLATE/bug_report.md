@@ -6,7 +6,7 @@ labels: bug
 
 ---
 
-<!-- Thanks for helping us to improve Luet! We welcome all bug reports. Please fill out each area of the template so we can better help you. Comments like this will be hidden when you post but you can delete them if you wish. -->
+<!-- Thanks for helping us to improve Anise or Anise Build! We welcome all bug reports. Please fill out each area of the template so we can better help you. Comments like this will be hidden when you post but you can delete them if you wish. -->
 
 **Anise version:**
 <!-- Provide the output from "anise --version" or "anise-build --version" -->
