@@ -1,0 +1,8 @@
+name: "example"
+description: "Repository Example"
+type: "http"
+enable: true
+cached: true
+priority: 30
+urls:
+  - PLACEHOLDER_URL
