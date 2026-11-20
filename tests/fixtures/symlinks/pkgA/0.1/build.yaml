@@ -1,4 +1,6 @@
 image: "alpine"
+includes:
+- /file1
 prelude:
 - echo "test" > /file2
 steps:

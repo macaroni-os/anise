@@ -1,4 +1,4 @@
-image: quay.io/mocaccino/extra
+image: macaronios/terragon:latest-amd64
 steps:
 - touch /{{.Values.name}}
 - touch /build-extra-{{.Values.foo}}
