@@ -136,22 +136,6 @@ func OrderFiles(target string, files []string) ([]string, []string, []string) {
 	return newFiles, dirs, notPresent
 }
 
-func ListDir(dir string) ([]string, error) {
-	content := []string{}
-
-	err := filepath.Walk(dir,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			content = append(content, path)
-
-			return nil
-		})
-
-	return content, err
-}
-
 // DirectoryIsEmpty Checks wether the directory is empty or not
 func DirectoryIsEmpty(dir string) (bool, error) {
 	f, err := os.Open(dir)

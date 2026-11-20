@@ -75,16 +75,6 @@ func prepareTarformers(in io.Reader, modifier tarf.TarFileHandlerFunc,
 	return tarformers
 }
 
-func UntarProtectSpecCompress(dst string, protectedFiles []string,
-	modifier tarf.TarFileHandlerFunc, spec *tarf_specs.SpecFile,
-	compressStream io.Reader) error {
-
-	tarformers := prepareTarformers(compressStream,
-		modifier, spec, protectedFiles)
-
-	return tarformers.RunTask(spec, dst)
-}
-
 func UntarProtectSpec(src, dst string, protectedFiles []string, modifier tarf.TarFileHandlerFunc, spec *tarf_specs.SpecFile) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -95,9 +85,4 @@ func UntarProtectSpec(src, dst string, protectedFiles []string, modifier tarf.Ta
 	tarformers := prepareTarformers(in, modifier, spec, protectedFiles)
 
 	return tarformers.RunTask(spec, dst)
-}
-
-// Untar just a wrapper around the docker functions
-func Untar(src, dest string, sameOwner, overwriteDirPerms bool) error {
-	return UntarProtect(src, dest, sameOwner, overwriteDirPerms, []string{}, nil)
 }

@@ -12,8 +12,6 @@ import (
 
 	pkg "github.com/macaroni-os/anise/pkg/package"
 	spectooling "github.com/macaroni-os/anise/pkg/spectooling"
-
-	"gopkg.in/yaml.v3"
 )
 
 func ReadDefinitionFile(defFile string) (*pkg.DefaultPackage, error) {
@@ -63,25 +61,6 @@ func ReadDefinitionFromCollection(cFile string, atom *pkg.DefaultPackage) (*pkg.
 	}
 
 	return nil, fmt.Errorf("Package %s not found on collection", atom.HumanReadableString())
-}
-
-func ReadDefinitionFileAsMap(defFile string) (*map[string]interface{}, error) {
-	data, err := os.ReadFile(defFile)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Error on read file %s: %s",
-			defFile, err.Error())
-	}
-
-	ans := make(map[string]interface{}, 0)
-	err = yaml.Unmarshal(data, &ans)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Error on unmarshal data of file %s: %s",
-			defFile, err.Error())
-	}
-
-	return &ans, nil
 }
 
 func WriteDefinitionFile(p pkg.Package, definitionFilePath string) error {

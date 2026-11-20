@@ -7,8 +7,6 @@ package helpers
 
 import (
 	"io/ioutil"
-	"path/filepath"
-	"strings"
 
 	fileHelper "github.com/macaroni-os/anise/pkg/helpers/file"
 
@@ -19,13 +17,6 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/engine"
 )
-
-// ChartFileB is an helper that takes a slice of bytes and construct a chart.File slice from it
-func ChartFileB(s []byte) []*chart.File {
-	return []*chart.File{
-		{Name: "templates", Data: s},
-	}
-}
 
 // ChartFileS is an helper that takes a string and construct a chart.File slice from it
 func ChartFileS(s string) []*chart.File {
@@ -47,37 +38,6 @@ func ChartFile(s ...string) []*chart.File {
 	}
 
 	return files
-}
-
-// ChartFiles reads a list of paths and reads all yaml file inside. It returns a
-// slice of pointers of chart.File(s) with the raw content of the yaml
-func ChartFiles(path []string) ([]*chart.File, error) {
-	var chartFiles []*chart.File
-	for _, t := range path {
-		rel, err := fileHelper.Rel2Abs(t)
-		if err != nil {
-			return nil, err
-		}
-
-		if !fileHelper.Exists(rel) {
-			continue
-		}
-		files, err := fileHelper.ListDir(rel)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, f := range files {
-			if strings.ToLower(filepath.Ext(f)) == ".yaml" {
-				raw, err := ioutil.ReadFile(f)
-				if err != nil {
-					return nil, err
-				}
-				chartFiles = append(chartFiles, &chart.File{Name: f, Data: raw})
-			}
-		}
-	}
-	return chartFiles, nil
 }
 
 // RenderHelm renders the template string with helm

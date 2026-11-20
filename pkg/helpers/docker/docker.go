@@ -7,7 +7,6 @@ package docker
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 
@@ -16,11 +15,8 @@ import (
 	continerdarchive "github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/images"
 	tregistry "github.com/docker/docker/api/types/registry"
-	tarf "github.com/geaaru/tar-formers/pkg/executor"
-	tarf_specs "github.com/geaaru/tar-formers/pkg/specs"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/opencontainers/go-digest"
@@ -43,48 +39,6 @@ func (s staticAuth) Authorization() (*authn.AuthConfig, error) {
 		IdentityToken: s.auth.IdentityToken,
 		RegistryToken: s.auth.RegistryToken,
 	}, nil
-}
-
-// UnarchiveLayers extract layers with archive.Untar from docker instead of containerd
-func UnarchiveLayers(temp string, img v1.Image, image, dest string, auth *tregistry.AuthConfig, verify bool) (int64, error) {
-	layers, err := img.Layers()
-	if err != nil {
-		return 0, fmt.Errorf("reading layers from '%s' image failed: %v", image, err)
-	}
-
-	var size int64
-	for _, l := range layers {
-		s, err := l.Size()
-		if err != nil {
-			return 0, fmt.Errorf("reading layer size from '%s' image failed: %v", image, err)
-		}
-		size += s
-
-		layerReader, err := l.Uncompressed()
-		if err != nil {
-			return 0, fmt.Errorf("reading uncompressed layer from '%s' image failed: %v", image, err)
-		}
-		defer layerReader.Close()
-
-		spec := tarf_specs.NewSpecFile()
-		spec.SameOwner = true
-		spec.EnableMutex = true
-		spec.OverwritePerms = true
-		spec.IgnoreRegexes = []string{
-			// prevent 'operation not permitted'
-			//"^/dev/",
-		}
-		spec.IgnoreFiles = []string{}
-
-		tarformers := tarf.NewTarFormers(tarf.GetOptimusPrime().Config)
-		tarformers.SetReader(layerReader)
-
-		if err := tarformers.RunTask(spec, dest); err != nil {
-			return 0, fmt.Errorf("extracting '%s' image to directory %s failed: %v", image, dest, err)
-		}
-	}
-
-	return size, nil
 }
 
 // DownloadAndExtractDockerImage extracts a container image natively. It supports privileged/unprivileged mode

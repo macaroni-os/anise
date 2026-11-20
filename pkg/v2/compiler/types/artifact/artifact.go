@@ -428,35 +428,6 @@ func (a *PackageArtifact) GetFileName() string {
 	return path.Base(a.Path)
 }
 
-// CreateArtifactForFile creates a new artifact from the given file
-func CreateArtifactForFile(s string, opts ...func(*PackageArtifact)) (*PackageArtifact, error) {
-	if _, err := os.Stat(s); os.IsNotExist(err) {
-		return nil, errors.Wrap(err, "artifact path doesn't exist")
-	}
-	fileName := path.Base(s)
-	archive, err := AniseCfg.GetSystem().TempDir("archive")
-	if err != nil {
-		return nil, errors.Wrap(err, "error met while creating tempdir for "+s)
-	}
-	defer os.RemoveAll(archive) // clean up
-	dst := filepath.Join(archive, fileName)
-	if err := fileHelper.CopyFile(s, dst); err != nil {
-		return nil, errors.Wrapf(err, "error while copying %s to %s", s, dst)
-	}
-
-	artifact, err := AniseCfg.GetSystem().TempDir("artifact")
-	if err != nil {
-		return nil, errors.Wrap(err, "error met while creating tempdir for "+s)
-	}
-	a := &PackageArtifact{Path: filepath.Join(artifact, fileName)}
-
-	for _, o := range opts {
-		o(a)
-	}
-
-	return a, a.Compress(archive, 1)
-}
-
 // Compress is responsible to archive and compress to the artifact Path.
 // It accepts a source path, which is the content to be archived/compressed
 // and a concurrency parameter.
