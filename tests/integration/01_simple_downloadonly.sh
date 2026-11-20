@@ -4,7 +4,7 @@ testsourcedir=$(dirname "${BASH_SOURCE[0]}")
 source ${testsourcedir}/_common.sh
 
 oneTimeSetUp() {
-  export tmpdir="$(mktemp -d)"
+export tmpdir="$(mktemp -d)"
 }
 
 oneTimeTearDown() {
@@ -25,18 +25,18 @@ testBuild() {
 }
 
 testRepo() {
-  assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
-  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
-  --output $tmpdir/testbuild \
-  --packages $tmpdir/testbuild \
-  --name "test" \
-  --descr "Test Repo" \
-  --urls $tmpdir/testrootfs \
-  --type disk > ${OUTPUT}
+    assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
+    $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
+    --output $tmpdir/testbuild \
+    --packages $tmpdir/testbuild \
+    --name "test" \
+    --descr "Test Repo" \
+    --urls $tmpdir/testrootfs \
+    --type disk > ${OUTPUT}
 
-  createst=$?
-  assertEquals 'create repo successfully' "$createst" "0"
-  assertTrue 'create repository' "[ -e '$tmpdir/testbuild/repository.yaml' ]"
+    createst=$?
+    assertEquals 'create repo successfully' "$createst" "0"
+    assertTrue 'create repository' "[ -e '$tmpdir/testbuild/repository.yaml' ]"
 }
 
 testConfig() {
@@ -55,24 +55,36 @@ repositories:
      cached: true
      urls:
        - "$tmpdir/testbuild"
+repos_confdir:
+  - "$tmpdir/etc/anise/repos.conf.d"
+config_protect_confdir:
+  - "$tmpdir/etc/anise/config.protect.d"
+subsets_defdir:
+  - "$tmpdir/etc/anise/subsets.conf.d"
 EOF
     $ANISE config --config $tmpdir/anise.yaml
     res=$?
     assertEquals 'config test successfully' "$res" "0"
 }
 
-testInstall() {
-    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c
+testDownloadOnly() {
+    $ANISE install --sync-repos -y --download-only --config $tmpdir/anise.yaml test/c > /dev/null
+    installst=$?
+    assertEquals 'install test successfully' "$installst" "0"
+    assertTrue 'package not installed' "[ ! -e '$tmpdir/testrootfs/c' ]"
+    assertTrue 'cache populated' "[ -e '$tmpdir/testrootfs/var/cache/anise/packages/c-test-1.0.package.tar.gz' ]"
+
+    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c > /dev/null
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
     assertTrue 'package installed' "[ -e '$tmpdir/testrootfs/c' ]"
 }
 
 testCleanup() {
-    $ANISE cleanup --config $tmpdir/anise.yaml
+    $ANISE cleanup --config $tmpdir/anise.yaml > /dev/null
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
-    assertTrue 'package installed' "[ ! -e '$tmpdir/testrootfs/packages/c-test-1.0.package.tar.gz' ]"
+    assertTrue 'downloaded package removed from cache' "[ ! -e '$tmpdir/testrootfs/var/cache/anise/packages/c-test-1.0.package.tar.gz' ]"
 }
 
 # Load shUnit2.

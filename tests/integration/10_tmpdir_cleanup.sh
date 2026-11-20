@@ -4,7 +4,8 @@ testsourcedir=$(dirname "${BASH_SOURCE[0]}")
 source ${testsourcedir}/_common.sh
 
 oneTimeSetUp() {
-  export tmpdir="$(mktemp -d)"
+export tmpdir="$(mktemp -d)"
+export ANISE_SYSTEM__TMPDIR_BASE="$tmpdir/anise-work"
 }
 
 oneTimeTearDown() {
@@ -12,27 +13,27 @@ oneTimeTearDown() {
 }
 
 testBuild() {
-  $ANISE_BUILD tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/fileconflicts"
+  $ANISE_BUILD tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/buildableseed"
   genidx=$?
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/fileconflicts" --destination $tmpdir/testbuild --compression gzip --all
+  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/buildableseed" --destination $tmpdir/testbuild --compression gzip test/c > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
-  assertTrue 'create packages' "[ -e '$tmpdir/testbuild/conflict-test1-1.0.package.tar.gz' ]"
-  assertTrue 'create packages' "[ -e '$tmpdir/testbuild/conflict-test2-1.0.package.tar.gz' ]"
+  assertTrue 'create package dep B' "[ -e '$tmpdir/testbuild/b-test-1.0.package.tar.gz' ]"
+  assertTrue 'create package' "[ -e '$tmpdir/testbuild/c-test-1.0.package.tar.gz' ]"
 }
 
 testRepo() {
   assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
-  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/fileconflicts" \
+  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
   --output $tmpdir/testbuild \
   --packages $tmpdir/testbuild \
   --name "test" \
   --descr "Test Repo" \
   --urls $tmpdir/testrootfs \
-  --type disk > /dev/null
+  --type disk > ${OUTPUT}
 
   createst=$?
   assertEquals 'create repo successfully' "$createst" "0"
@@ -62,13 +63,13 @@ EOF
     assertEquals 'config test successfully' "$res" "0"
 }
 
-testReInstall() {
-    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test1/conflict
-    installst=$?
-    assertEquals 'install test succeeded' "$installst" "0"
-    $ANISE miner ri --config $tmpdir/anise.yaml test1/conflict
-    installst=$?
-    assertEquals 'reinstall test succeeded' "$installst" "0"
+testRepoUpdate() {
+    $ANISE repo update --config $tmpdir/anise.yaml
+    res=$?
+
+    assertEquals 'repo update successfully' "$res" "0"
+    assertTrue 'repo cached correctly' "[ -e '$tmpdir/testrootfs/repos/main' ]"
+    assertTrue 'tmpdir cleanup' "[ ! -e '$ANISE_SYSTEM__TMPDIR_BASE' ]"
 }
 
 # Load shUnit2.

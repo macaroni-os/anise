@@ -15,16 +15,14 @@ fi
 
 export PATH=$ROOT_DIR/tests/integration/bin/:$PATH
 
-if [ -z "$SINGLE_TEST" ]; then
-
-  for script in $(ls "$ROOT_DIR/tests/integration/" | grep '^[0-9]_*.*.sh'); do
-    echo "Executing test '$script'."
-    $ROOT_DIR/tests/integration/$script
-  done
-
+if [ -n "${SINGLE_TEST:-}" ]; then
+  scripts=("$ROOT_DIR/tests/integration/$SINGLE_TEST")
 else
-
-  echo "Executing test '$SINGLE_TEST'."
-  $ROOT_DIR/tests/integration/$SINGLE_TEST
-
+  shopt -s nullglob
+  scripts=("$ROOT_DIR"/tests/integration/[0-9]*_*.sh)
 fi
+
+for script in "${scripts[@]}"; do
+  echo "Executing test '${script##*/}'."
+  "$script"
+done

@@ -5,33 +5,34 @@ source ${testsourcedir}/_common.sh
 
 oneTimeSetUp() {
     export tmpdir="$(mktemp -d)"
-    docker images --filter='reference=anise/cache' --format='{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
 }
 
 oneTimeTearDown() {
     rm -rf "$tmpdir"
-    docker images --filter='reference=anise/cache' --format='{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
 }
 
 testBuild() {
-    [ "$ANISE_BACKEND" == "img" ] && startSkipping
+    "$ANISE_BUILD" tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/copy" || {
+        fail 'generate copy fixture index'
+        return
+    }
     cat <<EOF > $tmpdir/default.yaml
 extra: "bar"
 foo: "baz"
 EOF
     mkdir $tmpdir/testbuild
-    $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/join" \
+    $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/copy" \
                --destination $tmpdir/testbuild --concurrency 1 \
                --compression gzip --values $tmpdir/default.yaml \
                test/c
     buildst=$?
     assertEquals 'builds successfully' "$buildst" "0"
+    [ "$buildst" = 0 ] || return
     assertTrue 'create package c' "[ -e '$tmpdir/testbuild/c-test-1.2.package.tar.gz' ]"
     mkdir $tmpdir/extract
     tar -xvf $tmpdir/testbuild/c-test-1.2.package.tar.gz -C $tmpdir/extract
-    assertTrue 'create result from join' "[ -e '$tmpdir/extract/test3' ]"
-    assertTrue 'create result from join' "[ -f '$tmpdir/extract/newc' ]"
-    assertTrue 'create result from join' "[ -e '$tmpdir/extract/test4' ]"
+    assertTrue 'create result in package c' "[ -e '$tmpdir/extract/result' ]"
+    assertTrue 'create busybox in package c' "[ -f '$tmpdir/extract/bina/busybox' ]"
 }
 
 

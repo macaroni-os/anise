@@ -20,7 +20,7 @@ testBuild() {
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/upgrade_old_repo" --destination $tmpdir/testbuild --compression gzip --full
+  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/upgrade_old_repo" --destination $tmpdir/testbuild --compression gzip test/a test/b test/c
   buildst=$?
   assertTrue 'create package B 1.0' "[ -e '$tmpdir/testbuild/b-test-1.0.package.tar.gz' ]"
   assertEquals 'builds successfully' "$buildst" "0"
@@ -28,7 +28,7 @@ testBuild() {
   mkdir $tmpdir/testbuild_new
   $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/upgrade_new_downgrade" \
     --destination $tmpdir/testbuild_new \
-    --compression gzip --full
+    --compression gzip test/a test/b test/c
   buildst=$?
   assertTrue 'create package B 1.1' "[ -e '$tmpdir/testbuild_new/b-test-1.1.package.tar.gz' ]"
   assertEquals 'builds successfully' "$buildst" "0"
@@ -148,8 +148,9 @@ EOF
 
     $ANISE upgrade -y --config $tmpdir/anise.yaml --deep
     installst=$?
-    assertEquals 'downgarde test successfully' "$installst" "0"
-    assertTrue 'package installed B' "[ -e '$tmpdir/testrootfs/test5' ]"
+    assertEquals 'downgrade completed successfully' "$installst" "0"
+    assertTrue 'older package files restored' "[ -e '$tmpdir/testrootfs/test5' ]"
+    assertTrue 'newer package files removed' "[ ! -e '$tmpdir/testrootfs/newc' ]"
 }
 
 

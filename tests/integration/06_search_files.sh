@@ -31,35 +31,35 @@ testBuild() {
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip test/b@1.0 > ${OUTPUT}
+  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip =test/b-1.0 > ${OUTPUT}
   buildst=$?
   assertTrue 'create package B 1.0' "[ -e '$tmpdir/testbuild/b-test-1.0.package.tar.gz' ]"
   assertEquals 'builds successfully' "$buildst" "0"
 
-  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip test/b@1.1 > ${OUTPUT}
+  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip =test/b-1.1 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
   assertTrue 'create package B 1.1' "[ -e '$tmpdir/testbuild/b-test-1.1.package.tar.gz' ]"
 
-  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip test/a@1.0 > ${OUTPUT}
+  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip =test/a-1.0 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
   assertTrue 'create package A 1.0' "[ -e '$tmpdir/testbuild/a-test-1.0.package.tar.gz' ]"
 
-  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip test/a@1.1 > ${OUTPUT}
+  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip =test/a-1.1 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
 
   assertTrue 'create package A 1.1' "[ -e '$tmpdir/testbuild/a-test-1.1.package.tar.gz' ]"
 
-  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip test/a@1.2 > ${OUTPUT}
+  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip =test/a-1.2 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
 
   assertTrue 'create package A 1.2' "[ -e '$tmpdir/testbuild/a-test-1.2.package.tar.gz' ]"
 
 
-  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip test/c@1.0 > ${OUTPUT}
+  $ANISE_BUILD build --config $tmpdir/anise-build.yaml --tree "$ROOT_DIR/tests/fixtures/upgrade_integration" --destination $tmpdir/testbuild --compression gzip =test/c-1.0 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
   assertTrue 'create package C 1.0' "[ -e '$tmpdir/testbuild/c-test-1.0.package.tar.gz' ]"

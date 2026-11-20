@@ -4,7 +4,7 @@ testsourcedir=$(dirname "${BASH_SOURCE[0]}")
 source ${testsourcedir}/_common.sh
 
 oneTimeSetUp() {
-export tmpdir="$(mktemp -d)"
+  export tmpdir="$(mktemp -d)"
 }
 
 oneTimeTearDown() {
@@ -12,20 +12,20 @@ oneTimeTearDown() {
 }
 
 testBuild() {
-  $ANISE_BUILD tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/docker"
+  $ANISE_BUILD tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/annotations"
   genidx=$?
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/docker" --destination $tmpdir/testbuild --compression gzip --all > ${OUTPUT}
+  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/annotations" --destination $tmpdir/testbuild --compression gzip test/pkgA > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
-  assertTrue 'create package' "[ -e '$tmpdir/testbuild/alpine-seed-1.0.package.tar.gz' ]"
+  assertTrue 'create package A' "[ -e '$tmpdir/testbuild/pkgA-test-0.1.package.tar.gz' ]"
 }
 
 testRepo() {
   assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
-  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/docker" \
+  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/annotations" \
   --output $tmpdir/testbuild \
   --packages $tmpdir/testbuild \
   --name "test" \
@@ -44,7 +44,7 @@ testConfig() {
 general:
   debug: true
 system:
-  rootfs: /
+  rootfs: $tmpdir/testrootfs
   database_path: "/"
   database_engine: "boltdb"
 config_from_host: true
@@ -61,21 +61,20 @@ EOF
     assertEquals 'config test successfully' "$res" "0"
 }
 
-# We test the Docker image generated with the current code that doesn't break
-# from scratch installations of packages.
 testInstall() {
-    docker build --rm --no-cache -t anise:test .
-    docker rm anise-runtime-test || true
-    docker run --name anise-runtime-test \
-       -v /tmp:/tmp \
-       -v $tmpdir/anise.yaml:/etc/anise/anise.yaml:ro \
-       anise:test install --sync-repos -y seed/alpine
+    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/pkgA
     installst=$?
-    assertEquals 'install test successfully' "0" "$installst"
+    assertEquals 'install test successfully' "$installst" "0"
+    assertTrue 'package A installed' "[ -e '$tmpdir/testrootfs/file1' ]"
+}
 
-    docker commit anise-runtime-test anise-runtime-test-image
-    test=$(docker run --rm --entrypoint /bin/sh anise-runtime-test-image -c 'echo "ftw"')
-    assertContains 'generated image runs successfully' "$test" "ftw"
+testAnnotations() {
+    local output
+    output=$("$ANISE" search --config "$tmpdir/anise.yaml" --installed --annotation label1 --output json)
+    assertEquals 'search annotations' 0 "$?"
+    assertContains 'package found by annotation' "$output" 'pkgA'
+    assertContains 'first annotation persisted' "$output" 'value1'
+    assertContains 'second annotation persisted' "$output" 'value2'
 }
 
 # Load shUnit2.

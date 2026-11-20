@@ -4,28 +4,28 @@ testsourcedir=$(dirname "${BASH_SOURCE[0]}")
 source ${testsourcedir}/_common.sh
 
 oneTimeSetUp() {
-  export tmpdir="$(mktemp -d)"
+export tmpdir="$(mktemp -d)"
 }
 
 oneTimeTearDown() {
-  rm -rf "$tmpdir"
+    rm -rf "$tmpdir"
 }
 
 testBuild() {
-  $ANISE_BUILD tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/caps"
+  $ANISE_BUILD tree genidx --only-upper-level -t "$ROOT_DIR/tests/fixtures/symlinks"
   genidx=$?
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build -d --tree "$ROOT_DIR/tests/fixtures/caps" --same-owner=true --destination $tmpdir/testbuild --compression gzip --full
+  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/symlinks" --destination $tmpdir/testbuild --compression gzip test/pkgAsym test/pkgBsym
   buildst=$?
-  assertTrue 'create package caps 0.1' "[ -e '$tmpdir/testbuild/caps-test-0.1.package.tar.gz' ]"
+  assertTrue 'create package pkgAsym 0.1' "[ -e '$tmpdir/testbuild/pkgAsym-test-0.1.package.tar.gz' ]"
   assertEquals 'builds successfully' "$buildst" "0"
 }
 
 testRepo() {
   assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
-  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/caps" \
+  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/symlinks" \
   --output $tmpdir/testbuild \
   --packages $tmpdir/testbuild \
   --name "test" \
@@ -62,15 +62,14 @@ EOF
 }
 
 testInstall() {
-    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/caps@0.1 test/caps2@0.1
+    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/pkgAsym test/pkgBsym
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
-   
-    assertTrue 'package installed file1' "[ -e '$tmpdir/testrootfs/file1' ]"
-    assertTrue 'package installed file2' "[ -e '$tmpdir/testrootfs/file2' ]"
+    ls -liah $tmpdir/testrootfs/
+    assertTrue 'package did not install file2' "[ ! -e '$tmpdir/testrootfs/file2' ]"
+    assertTrue 'package installed file3 as symlink' "[ -L '$tmpdir/testrootfs/file3' ]"
+    assertTrue 'package installed file1 as symlink' "[ -L '$tmpdir/testrootfs/file1' ]"
 
-    assertContains 'caps' "$(getcap $tmpdir/testrootfs/file1)" "cap_net_raw=ep"
-    assertContains 'caps' "$(getcap $tmpdir/testrootfs/file2)" "cap_net_raw=ep"
 }
 
 

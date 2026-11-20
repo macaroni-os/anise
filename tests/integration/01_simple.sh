@@ -46,8 +46,16 @@ general:
   debug: true
 system:
   rootfs: $tmpdir/testrootfs
-  database_engine: "memory"
+  database_path: "/"
+  database_engine: "boltdb"
 config_from_host: true
+repos_confdir:
+  - "$tmpdir/etc/anise/repos.conf.d"
+config_protect_confdir:
+  - "$tmpdir/etc/anise/config.protect.d"
+subsets_defdir:
+  - "$tmpdir/etc/anise/subsets.conf.d"
+
 repositories:
    - name: "main"
      type: "disk"
@@ -55,33 +63,46 @@ repositories:
      cached: true
      urls:
        - "$tmpdir/testbuild"
-repos_confdir:
-  - "$tmpdir/etc/anise/repos.conf.d"
-config_protect_confdir:
-  - "$tmpdir/etc/anise/config.protect.d"
-subsets_defdir:
-  - "$tmpdir/etc/anise/subsets.conf.d"
 EOF
-    $ANISE config --config $tmpdir/anise.yaml
+    "$ANISE" config --config "$tmpdir/anise.yaml"
     res=$?
     assertEquals 'config test successfully' "$res" "0"
 }
 
-testDownloadOnly() {
-    $ANISE install --sync-repos -y --download-only --config $tmpdir/anise.yaml test/c > /dev/null
-    installst=$?
-    assertEquals 'install test successfully' "$installst" "0"
-    assertTrue 'package not installed' "[ ! -e '$tmpdir/testrootfs/c' ]"
-    assertTrue 'cache populated' "[ -e '$tmpdir/testrootfs/var/cache/anise/packages/c-test-1.0.package.tar.gz' ]"
-
-    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c > /dev/null
+testInstall() {
+    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c
+    #$ANISE install -y --config $tmpdir/anise.yaml test/c@1.0 > /dev/null
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
     assertTrue 'package installed' "[ -e '$tmpdir/testrootfs/c' ]"
 }
 
+testReInstall() {
+    output=$($ANISE install --sync-repos -y --config $tmpdir/anise.yaml  test/c@1.0)
+    installst=$?
+    assertEquals 'install test successfully' "$installst" "0"
+    assertContains 'contains warning' "$output" 'No packages to install'
+}
+
+testUnInstall() {
+    $ANISE uninstall -y --config $tmpdir/anise.yaml test/c
+    installst=$?
+    assertEquals 'uninstall test successfully' "$installst" "0"
+    assertTrue 'package uninstalled' "[ ! -e '$tmpdir/testrootfs/c' ]"
+}
+
+testInstallAgain() {
+    assertTrue 'package uninstalled' "[ ! -e '$tmpdir/testrootfs/c' ]"
+    output=$($ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c@1.0)
+    installst=$?
+    assertEquals 'install test successfully' "$installst" "0"
+    assertNotContains 'contains warning' "$output" 'No packages to install'
+    assertTrue 'package installed' "[ -e '$tmpdir/testrootfs/c' ]"
+    assertTrue 'package in cache' "[ -e '$tmpdir/testrootfs/packages/c-test-1.0.package.tar.gz' ]"
+}
+
 testCleanup() {
-    $ANISE cleanup --config $tmpdir/anise.yaml > /dev/null
+    $ANISE cleanup --config $tmpdir/anise.yaml
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
     assertTrue 'package installed' "[ ! -e '$tmpdir/testrootfs/packages/c-test-1.0.package.tar.gz' ]"

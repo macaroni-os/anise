@@ -4,13 +4,11 @@ testsourcedir=$(dirname "${BASH_SOURCE[0]}")
 source ${testsourcedir}/_common.sh
 
 oneTimeSetUp() {
-  export tmpdir="${TEST_TMPDIR:-$(mktemp -d)}"
+  export tmpdir="$(mktemp -d)"
 }
 
 oneTimeTearDown() {
-  if [ -z "${SKIP_CLEAN}" ] ; then
-    rm -rf "$tmpdir"
-  fi
+  rm -rf "$tmpdir"
 }
 
 testBuild() {
@@ -19,11 +17,32 @@ testBuild() {
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/buildableseed" --destination $tmpdir/testbuild --compression gzip test/c@1.0 > ${OUTPUT}
+  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/buildableseed" --destination $tmpdir/testbuild --compression gzip =test/c-1.0 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
   assertTrue 'create package dep B' "[ -e '$tmpdir/testbuild/b-test-1.0.package.tar.gz' ]"
   assertTrue 'create package' "[ -e '$tmpdir/testbuild/c-test-1.0.package.tar.gz' ]"
+}
+
+testRepo() {
+  assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
+  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
+  --output $tmpdir/testbuild \
+  --packages $tmpdir/testbuild \
+  --name "test" \
+  --descr "Test Repo" \
+  --urls $tmpdir/testrootfs \
+  --tree-compression gzip \
+  --tree-filename foo.tar.gz \
+  --with-compilertree \
+  --type disk ${OUTPUT}
+
+    createst=$?
+    assertEquals 'create repo successfully' "$createst" "0"
+    assertTrue 'create repository' "[ -e '$tmpdir/testbuild/repository.yaml' ]"
+    assertTrue 'create named tree in gzip' "[ -e '$tmpdir/testbuild/foo.tar.gz' ]"
+    assertTrue 'create tree in gzip-only' "[ ! -e '$tmpdir/testbuild/foo.tar' ]"
+    assertTrue 'create compieler tree' "[ -e '$tmpdir/testbuild/compilertree.tar.zst' ]"
 }
 
 testConfig() {
@@ -36,12 +55,6 @@ system:
   database_path: "/"
   database_engine: "boltdb"
 config_from_host: true
-repos_confdir:
-  - "$tmpdir/etc/anise/repos.conf.d"
-config_protect_confdir:
-  - "$tmpdir/etc/anise/config.protect.d"
-subsets_defdir:
-  - "$tmpdir/etc/anise/subsets.conf.d"
 repositories:
    - name: "main"
      type: "disk"
@@ -53,19 +66,6 @@ EOF
     $ANISE config --config $tmpdir/anise.yaml
     res=$?
     assertEquals 'config test successfully' "$res" "0"
-}
-
-testRepo() {
-    assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
-    $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
-    --config $tmpdir/anise.yaml \
-    --output $tmpdir/testbuild \
-    --packages $tmpdir/testbuild \
-    --repo "main" > ${OUTPUT}
-
-    createst=$?
-    assertEquals 'create repo successfully' "$createst" "0"
-    assertTrue 'create repository' "[ -e '$tmpdir/testbuild/repository.yaml' ]"
 }
 
 testInstall() {

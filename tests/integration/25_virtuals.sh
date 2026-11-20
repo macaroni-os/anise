@@ -24,11 +24,14 @@ testBuildA() {
   assertTrue 'create package A 1.99' "[ -e '$tmpdir/testbuild1/a-test-1.99.metadata.yaml' ]"
 }
 
-testBuildB() {
+testBuildWithVirtualDependency() {
   mkdir $tmpdir/testbuild2
   $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/virtuals"  --debug --compression "gzip" --destination $tmpdir/testbuild2 test/b
   buildst=$?
-  assertEquals 'builds of B expected to fail. It depends on a virtual' "$buildst" "1"
+  assertEquals 'build with a virtual dependency succeeds' "$buildst" "0"
+  assertTrue 'create virtual dependency A' "[ -e '$tmpdir/testbuild2/a-test-1.99.package.tar.gz' ]"
+  assertTrue 'create package B' "[ -e '$tmpdir/testbuild2/b-test-1.0.package.tar.gz' ]"
+  assertTrue 'create metadata for package B' "[ -e '$tmpdir/testbuild2/b-test-1.0.metadata.yaml' ]"
 }
 
 testBuildC() {

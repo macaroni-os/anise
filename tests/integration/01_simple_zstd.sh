@@ -3,15 +3,12 @@
 testsourcedir=$(dirname "${BASH_SOURCE[0]}")
 source ${testsourcedir}/_common.sh
 
-TEST_PORT="${TEST_PORT:-9090}"
-
 oneTimeSetUp() {
-  export tmpdir="${TEST_TMPDIR:-$(mktemp -d)}"
+export tmpdir="$(mktemp -d)"
 }
 
 oneTimeTearDown() {
-    rm -rf "$tmpdir"
-    kill '%1' || true
+  rm -rf "$tmpdir"
 }
 
 testBuild() {
@@ -20,7 +17,7 @@ testBuild() {
   assertEquals 'genidx successfully' "$genidx" "0"
 
   mkdir $tmpdir/testbuild
-  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/buildableseed" --destination $tmpdir/testbuild --compression zstd test/c@1.0 > ${OUTPUT}
+  $ANISE_BUILD build --tree "$ROOT_DIR/tests/fixtures/buildableseed" --destination $tmpdir/testbuild --compression zstd =test/c-1.0 > ${OUTPUT}
   buildst=$?
   assertEquals 'builds successfully' "$buildst" "0"
   assertTrue 'create package dep B' "[ -e '$tmpdir/testbuild/b-test-1.0.package.tar.zst' ]"
@@ -28,20 +25,21 @@ testBuild() {
 }
 
 testRepo() {
-    $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
-    --output $tmpdir/testbuild \
-    --packages $tmpdir/testbuild \
-    --name "test" \
-    --descr "Test Repo" \
-    --urls $tmpdir/testrootfs \
-    --tree-compression zstd \
-    --tree-filename foo.tar \
-    --type disk > ${OUTPUT}
+  assertTrue 'no repository' "[ ! -e '$tmpdir/testbuild/repository.yaml' ]"
+  $ANISE_BUILD create-repo --tree "$ROOT_DIR/tests/fixtures/buildableseed" \
+  --output $tmpdir/testbuild \
+  --packages $tmpdir/testbuild \
+  --name "test" \
+  --descr "Test Repo" \
+  --urls $tmpdir/testrootfs \
+  --tree-filename foo.tar.zst \
+  --type disk > /dev/null
 
-    createst=$?
-    assertEquals 'create repo successfully' "$createst" "0"
-
-    $ANISE_BUILD serve-repo --dir $tmpdir/testbuild --port $TEST_PORT -d &
+  createst=$?
+  assertEquals 'create repo successfully' "$createst" "0"
+  assertTrue 'create repository' "[ -e '$tmpdir/testbuild/repository.yaml' ]"
+  assertTrue 'create named tree in zstd' "[ -e '$tmpdir/testbuild/foo.tar.zst' ]"
+  assertTrue 'create tree in zstd-only' "[ ! -e '$tmpdir/testbuild/foo.tar' ]"
 }
 
 testConfig() {
@@ -54,34 +52,32 @@ system:
   database_path: "/"
   database_engine: "boltdb"
 config_from_host: true
-repos_confdir:
-  - "$tmpdir/etc/anise/repos.conf.d"
-config_protect_confdir:
-  - "$tmpdir/etc/anise/config.protect.d"
-subsets_defdir:
-  - "$tmpdir/etc/anise/subsets.conf.d"
 repositories:
    - name: "main"
-     type: "http"
+     type: "disk"
      enable: true
      cached: true
      urls:
-       - "http://127.0.0.1:$TEST_PORT"
+       - "$tmpdir/testbuild"
 EOF
     $ANISE config --config $tmpdir/anise.yaml
     res=$?
     assertEquals 'config test successfully' "$res" "0"
+    $ANISE repo update --config $tmpdir/anise.yaml
+    res=$?
+    assertEquals 'repo update successfully' "$res" "0"
 }
 
 testInstall() {
-    $ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c@1.0
+    $ANISE install -y --config $tmpdir/anise.yaml test/c@1.0
+    #$ANISE install -y --config $tmpdir/anise.yaml test/c@1.0 > /dev/null
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
     assertTrue 'package installed' "[ -e '$tmpdir/testrootfs/c' ]"
 }
 
 testReInstall() {
-    output=$($ANISE install --sync-repos -y --config $tmpdir/anise.yaml  test/c@1.0)
+    output=$($ANISE install -y --config $tmpdir/anise.yaml  test/c@1.0)
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
     assertContains 'contains warning' "$output" 'No packages to install'
@@ -96,7 +92,7 @@ testUnInstall() {
 
 testInstallAgain() {
     assertTrue 'package uninstalled' "[ ! -e '$tmpdir/testrootfs/c' ]"
-    output=$($ANISE install --sync-repos -y --config $tmpdir/anise.yaml test/c@1.0)
+    output=$($ANISE install -y --config $tmpdir/anise.yaml test/c@1.0)
     installst=$?
     assertEquals 'install test successfully' "$installst" "0"
     assertNotContains 'contains warning' "$output" 'No packages to install'
@@ -107,7 +103,8 @@ testInstallAgain() {
 testCleanup() {
     $ANISE cleanup --config $tmpdir/anise.yaml
     installst=$?
-    assertEquals 'cleanup test successfully' "$installst" "0"
+    assertEquals 'install test successfully' "$installst" "0"
+    assertTrue 'package installed' "[ ! -e '$tmpdir/testrootfs/packages/c-test-1.0.package.tar.zst' ]"
 }
 
 # Load shUnit2.
