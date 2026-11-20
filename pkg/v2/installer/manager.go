@@ -6,13 +6,12 @@ package installer
 
 import (
 	"fmt"
-	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	cfg "github.com/macaroni-os/anise/pkg/config"
@@ -145,7 +144,7 @@ func (m *ArtifactsManager) removePackageFiles(s *repos.Stone,
 
 	mapDirs := make(map[string]int, 0)
 	for _, d := range dirs2Remove {
-		mapDirs[d] = 1
+		mapDirs[filepath.Join("/", d)] = 1
 	}
 
 	sort.Sort(sort.Reverse(sort.StringSlice(toRemove)))
@@ -159,7 +158,6 @@ func (m *ArtifactsManager) removePackageFiles(s *repos.Stone,
 			continue
 		}
 
-		Debug("Removing", target)
 		if preserveSystemEssentialData &&
 			(strings.HasPrefix(f, m.Config.GetSystem().GetSystemPkgsCacheDirPath()) ||
 				strings.HasPrefix(f, m.Config.GetSystem().GetSystemRepoDatabaseDirPath())) {
@@ -173,41 +171,19 @@ func (m *ArtifactsManager) removePackageFiles(s *repos.Stone,
 			Warning("File not found (it was before?)", err.Error())
 			continue
 		}
-		switch mode := fi.Mode(); {
-		case mode.IsDir():
-			if mode&fs.ModeSymlink != 0 {
-				Debug(fmt.Sprintf("Directory %s is a link. Ignoring.", target))
-			} else {
-				files, err := ioutil.ReadDir(target)
-				if err != nil {
-					Warning("Failed reading folder", target, err.Error())
-				}
-				if len(files) != 0 {
-					Info("DROPPED = Preserving not-empty folder", target)
-					continue
-				}
+		path := filepath.Join("/", f)
+		if fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+			// Inspect directory links after removing package files, including files reached through aliases.
+			mapDirs[path] = 1
+		} else {
+			Debug("Removing", target)
+			if err = os.Remove(target); err != nil {
+				Warning("Failed removing file (maybe not present in the system target anymore ?)", target, err.Error())
 			}
 		}
 
-		if err = os.Remove(target); err != nil {
-			Warning("Failed removing file (maybe not present in the system target anymore ?)", target, err.Error())
-		}
-
-		// Add subpaths of the file to ensure that all dirs
-		// are injected for the prune phase.
-		dirname := filepath.Dir(target)
-		words := strings.Split(dirname, string(os.PathSeparator))
-
-		for i := len(words); i > 1; i-- {
-			cpath := strings.Join(words[0:i], string(os.PathSeparator))
-			if cpath == targetRootfs {
-				// Avoid to add on mapDirs system directory outside
-				// the rootfs when rootfs != /
-				break
-			}
-			if _, ok := mapDirs[cpath]; !ok {
-				mapDirs[cpath] = 1
-			}
+		for dir := filepath.Dir(path); dir != "/"; dir = filepath.Dir(dir) {
+			mapDirs[dir] = 1
 		}
 	}
 
@@ -238,8 +214,8 @@ func (m *ArtifactsManager) removePackageFiles(s *repos.Stone,
 	Debug("Directories tagged for the check and remove", len(dirs2Remove))
 
 	// Check if directories could be removed.
-	for _, f := range dirs2Remove {
-		f := filepath.Join(targetRootfs, f)
+	for _, path := range dirs2Remove {
+		f := filepath.Join(targetRootfs, path)
 
 		if preserveSystemEssentialData &&
 			strings.HasPrefix(f, m.Config.GetSystem().GetSystemPkgsCacheDirPath()) ||
@@ -249,33 +225,34 @@ func (m *ArtifactsManager) removePackageFiles(s *repos.Stone,
 			continue
 		}
 
-		if !m.Config.ConfigProtectSkip && cp.Protected(f) {
+		if !m.Config.ConfigProtectSkip && cp.Protected(path) {
 			Debug("Preserving protected file:", f)
 			continue
 		}
 
-		// Check if the directory is a link to avoid error with broken links.
+		dir := f
 		fi, err := os.Lstat(f)
-		if err == nil {
-			if fi.Mode()&fs.ModeSymlink == 0 {
-				if fi.IsDir() {
-					files, err := ioutil.ReadDir(f)
-					if err != nil {
-						Warning("Failed reading folder", f, err.Error())
-					}
-					Debug("Removing dir", f, "if empty: files ", len(files), ".")
-
-					if len(files) != 0 {
-						Debug("Preserving not-empty folder", f)
-						continue
-					}
-				}
-			} else {
-				Debug(fmt.Sprintf("Directory %s is a link to remove.", f))
+		if err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			dir, err = fileHelper.ResolvePathInRoot(targetRootfs, path)
+			if err == nil {
+				fi, err = os.Stat(dir)
 			}
 		}
-		// else remove the file in any case. I consider the file a broken link or
-		// a file that doesn't exist.
+		if err != nil && !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) && !errors.Is(err, syscall.ELOOP) {
+			Warning("Failed checking removal candidate", f, err.Error())
+			continue
+		}
+		if err == nil && fi.IsDir() {
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				Warning("Failed reading folder", dir, err.Error())
+				continue
+			}
+			if len(entries) != 0 {
+				Debug("Preserving non-empty directory", f)
+				continue
+			}
+		}
 
 		if err = os.Remove(f); err != nil {
 			Debug("Failed removing file (not present in the system target)", f, err.Error())

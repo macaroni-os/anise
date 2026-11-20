@@ -9,12 +9,32 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"syscall"
+	"testing"
 
 	fileHelper "github.com/macaroni-os/anise/pkg/helpers/file"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+func TestResolvePathInRoot(t *testing.T) {
+	g := NewWithT(t)
+	root := t.TempDir()
+	g.Expect(os.MkdirAll(filepath.Join(root, "usr", "lib64"), 0755)).To(Succeed())
+	g.Expect(os.Symlink("lib64", filepath.Join(root, "usr", "lib"))).To(Succeed())
+	g.Expect(os.Symlink("/usr/lib", filepath.Join(root, "lib"))).To(Succeed())
+	g.Expect(os.Symlink("../../usr/lib", filepath.Join(root, "up"))).To(Succeed())
+	g.Expect(os.Symlink("loop", filepath.Join(root, "loop"))).To(Succeed())
+
+	for _, path := range []string{"usr/lib", "/lib", "/up", "../../lib"} {
+		g.Expect(fileHelper.ResolvePathInRoot(root, path)).To(Equal(filepath.Join(root, "usr", "lib64")), "path %q", path)
+	}
+	g.Expect(fileHelper.ResolvePathInRoot(root, "/lib/new.so")).To(Equal(filepath.Join(root, "usr", "lib64", "new.so")))
+	g.Expect(fileHelper.ResolvePathInRoot(root, "/lib/..")).To(Equal(filepath.Join(root, "usr")))
+	_, err := fileHelper.ResolvePathInRoot(root, "/loop")
+	g.Expect(err).To(MatchError(syscall.ELOOP))
+}
 
 var _ = Describe("Helpers", func() {
 	Context("Exists", func() {

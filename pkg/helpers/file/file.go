@@ -55,6 +55,55 @@ func Move(src, dst string) error {
 	return t.CloseAtomicallyReplace()
 }
 
+// ResolvePathInRoot resolves symlinks relative to root, treating root as /.
+// The returned path describes the lookup at that moment. It can change if the filesystem is modified.
+func ResolvePathInRoot(root, path string) (string, error) {
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		return "", err
+	}
+	defer rootFS.Close()
+
+	const maxSymlinks = 40
+	const separator = string(filepath.Separator)
+	resolved := "."
+	for links := 0; path != ""; {
+		var component string
+		component, path, _ = strings.Cut(path, separator)
+		switch component {
+		case "", ".":
+			continue
+		case "..":
+			resolved = filepath.Dir(resolved)
+			continue
+		}
+
+		next := filepath.Join(resolved, component)
+		info, err := rootFS.Lstat(next)
+		if err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		if info == nil || info.Mode()&os.ModeSymlink == 0 {
+			resolved = next
+			continue
+		}
+		if links == maxSymlinks {
+			return "", &os.PathError{Op: "resolve", Path: filepath.Join(root, next), Err: syscall.ELOOP}
+		}
+		links++
+
+		destination, err := rootFS.Readlink(next)
+		if err != nil {
+			return "", err
+		}
+		if filepath.IsAbs(destination) {
+			resolved = "."
+		}
+		path = destination + separator + path
+	}
+	return filepath.Join(root, resolved), nil
+}
+
 func OrderFiles(target string, files []string) ([]string, []string, []string) {
 	var newFiles []string
 	var notPresent []string
