@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2017-2021  Daniele Rondina <geaaru@sabayonlinux.org>
+Copyright (C) 2017-2025  Daniele Rondina <geaaru@macaronios.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -186,8 +186,22 @@ func (p *GentooPackage) GetPN() string {
 	return p.Name
 }
 
-func (p *GentooPackage) GetPV() string {
-	return fmt.Sprintf("%s", p.Version)
+func (p *GentooPackage) GetPV() (ans string) {
+	// -r1 is a Gentoo-specific revision of the ebuild
+	// rather than the package, and so is not part of ${PV}
+	// _rc and other suffix is a revision of the package, and so is part of ${PV}
+	// Basically, everything but -r1, -r2 etc. are in ${PV}.
+
+	if p.VersionSuffix != "" {
+		if strings.Index(p.VersionSuffix, "-r") >= 0 {
+			ans = fmt.Sprintf("%s%s", p.Version, strings.Split(p.VersionSuffix, "-r")[0])
+		} else {
+			ans = fmt.Sprintf("%s%s", p.Version, p.VersionSuffix)
+		}
+	} else {
+		ans = fmt.Sprintf("%s", p.Version)
+	}
+	return
 }
 
 func (p *GentooPackage) GetPackageNameWithCond() (ans string) {
@@ -213,6 +227,61 @@ func (p *GentooPackage) GetPFB() string {
 		return fmt.Sprintf("%s-%s+%s", p.GetPN(), p.GetPVR(), p.VersionBuild)
 	}
 	return fmt.Sprintf("%s-%s", p.GetPN(), p.GetPVR())
+}
+
+func (p *GentooPackage) GetRevision() int {
+
+	ans := 0
+
+	if strings.Index(p.VersionSuffix, "-r") >= 0 {
+
+		v := p.VersionSuffix
+		if strings.Index(p.VersionSuffix, "+") > 0 {
+			v = p.VersionSuffix[0:strings.Index(p.VersionSuffix, "+")]
+		}
+
+		words := strings.Split(v, "-r")
+
+		// NOTE: -r is always at the end.
+		revision, _ := strconv.Atoi(words[1])
+		ans = revision
+
+	}
+
+	return ans
+}
+
+func (p *GentooPackage) IncrementRevision() {
+	if p.VersionSuffix == "" {
+		p.VersionSuffix = "-r1"
+	} else {
+		if strings.Index(p.VersionSuffix, "-r") >= 0 {
+
+			v := p.VersionSuffix
+			buildVersion := ""
+			if strings.Index(p.VersionSuffix, "+") > 0 {
+				v = p.VersionSuffix[0:strings.Index(p.VersionSuffix, "+")]
+				buildVersion = p.VersionSuffix[strings.Index(p.VersionSuffix, "+")+1 : len(p.VersionSuffix)]
+			}
+
+			words := strings.Split(v, "-r")
+
+			// NOTE: -r is always at the end.
+			revision, _ := strconv.Atoi(words[1])
+			revision++
+
+			if buildVersion != "" {
+				p.VersionSuffix = fmt.Sprintf("%s-r%d+%s",
+					words[0], revision, buildVersion)
+			} else {
+				p.VersionSuffix = fmt.Sprintf("%s-r%d",
+					words[0], revision)
+			}
+
+		} else {
+			p.VersionSuffix += "-r1"
+		}
+	}
 }
 
 func (p *GentooPackage) getVersions(i *GentooPackage) (*version.Version, *version.Version, error) {
@@ -701,6 +770,9 @@ func ParsePackageStr(pkg string) (*GentooPackage, error) {
 
 	// Check if there are use flags annotation
 	if strings.Index(pkgname, "[") > 0 {
+		if strings.Index(pkgname, "]") < 0 {
+			return nil, fmt.Errorf("Found [ but not ] on pkg string %s", pkg)
+		}
 		useFlags := pkgname[strings.Index(pkgname, "[")+1 : strings.Index(pkgname, "]")]
 		ans.UseFlags = strings.Split(useFlags, ",")
 		p := pkgname[0:strings.Index(pkgname, "[")]

@@ -712,7 +712,7 @@ func (m *PortageMetaData) WriteMetadata2Dir(dir string, opts *PortageUseParseOpt
 	)
 
 	var fileMode os.FileMode
-	fileMode = os.ModeDir | 0744
+	fileMode = os.ModeDir | 0755
 
 	err := os.MkdirAll(metadir, fileMode)
 	if err != nil {

@@ -151,8 +151,8 @@ github.com/fsnotify/fsnotify/internal
 # github.com/fxamacker/cbor/v2 v2.9.1
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/geaaru/pkgs-checker v0.14.1
-## explicit; go 1.21
+# github.com/geaaru/pkgs-checker v0.17.1
+## explicit; go 1.26.0
 github.com/geaaru/pkgs-checker/pkg/gentoo
 # github.com/geaaru/tar-formers v0.10.9
 ## explicit; go 1.26.0
@@ -287,7 +287,7 @@ github.com/google/renameio
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
-# github.com/hashicorp/go-version v1.7.0
+# github.com/hashicorp/go-version v1.9.0
 ## explicit
 github.com/hashicorp/go-version
 # github.com/huandu/xstrings v1.5.0
