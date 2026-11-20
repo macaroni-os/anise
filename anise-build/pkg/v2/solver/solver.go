@@ -260,8 +260,10 @@ func (s *BuildSolver) resolvePackage(ptask *PackageTask, stack []string) (*artif
 	if cs.Copy != nil && len(cs.Copy) > 0 {
 
 		for _, c := range cs.Copy {
-
 			dep := c.Package
+			if dep == nil {
+				continue
+			}
 
 			if dep.GetVersion() == "" {
 				dep.Version = ">=0"
@@ -426,8 +428,11 @@ func (s *BuildSolver) recursiveLoadDep(ptask *PackageTask,
 	if cs.Copy != nil && len(cs.Copy) > 0 {
 
 		for _, c := range cs.Copy {
-
 			dep := c.Package
+			if dep == nil {
+				// Ignore copy from image.
+				continue
+			}
 
 			if dep.GetVersion() == "" {
 				dep.Version = ">=0"
