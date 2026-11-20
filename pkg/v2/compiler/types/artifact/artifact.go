@@ -79,18 +79,28 @@ func (p *PackageArtifact) ToPackageThin(withDeps bool,
 	// In order to calculate the sha256 used for the images
 	// I create a PackageThin based on type of the PackageArtifact
 
-	if p.CompileSpec != nil && p.CompileSpec.IsVirtual() {
-		return p.Runtime.ToPackageThin(), nil
+	defPackage := p.GetPackage()
+	if defPackage == nil {
+		return nil, fmt.Errorf("invalid package artifact for ToPackageThin")
 	}
 
 	pthin := pkg.NewPackageThin(
-		p.GetPackage().GetName(),
-		p.GetPackage().GetCategory(),
-		p.GetPackage().GetVersion(),
+		defPackage.GetName(),
+		defPackage.GetCategory(),
+		defPackage.GetVersion(),
 		[]*pkg.PackageThin{}, []*pkg.PackageThin{},
 	)
 
-	pthin.UseFlags = p.GetPackage().GetUses()
+	pthin.UseFlags = defPackage.GetUses()
+
+	if p.CompileSpec != nil && p.CompileSpec.IsVirtual() {
+		if p.Runtime == nil {
+			// POST: This happens on build phase because BuildSolver
+			//       setup the artifact without Runtime definition
+			return pthin, nil
+		}
+		return p.Runtime.ToPackageThin(), nil
+	}
 
 	buildPackage := p.CompileSpec.Package
 
