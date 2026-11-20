@@ -101,7 +101,11 @@ func NewQueryFilesCommand(config *cfg.AniseConfig) *cobra.Command {
 				files := []queryFileWithSubsets{}
 				for _, s := range *res {
 					pkgArtifact := &artifact.PackageArtifact{Runtime: s.ToPackage()}
-					analyzer, err := subsets.NewSubsetsAnalyzerWithMatches(pkgArtifact.GetSubsets())
+					analyzer, err := subsets.NewSubsetsAnalyzerWithMatches(
+						// Enable subsets and trackMatches
+						true, true,
+						pkgArtifact.GetSubsets(),
+					)
 					if err != nil {
 						Fatal("Error analyzing subsets for ", s.HumanReadableString(), ": ", err.Error())
 					}
