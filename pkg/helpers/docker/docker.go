@@ -14,11 +14,11 @@ import (
 
 	continerdarchive "github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/images"
-	tregistry "github.com/docker/docker/api/types/registry"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	tregistry "github.com/moby/moby/api/types/registry"
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"

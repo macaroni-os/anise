@@ -11,8 +11,8 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/registry"
 	"github.com/pkg/errors"
 
 	"github.com/macaroni-os/anise/pkg/config"

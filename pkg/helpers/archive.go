@@ -11,9 +11,10 @@ import (
 
 	. "github.com/macaroni-os/anise/pkg/config"
 
-	"github.com/docker/docker/pkg/archive"
 	tarf "github.com/geaaru/tar-formers/pkg/executor"
 	tarf_specs "github.com/geaaru/tar-formers/pkg/specs"
+	"github.com/moby/go-archive"
+	"github.com/moby/go-archive/compression"
 )
 
 func Tar(src, dest string) error {
@@ -23,7 +24,7 @@ func Tar(src, dest string) error {
 	}
 	defer out.Close()
 
-	fs, err := archive.Tar(src, archive.Uncompressed)
+	fs, err := archive.Tar(src, compression.None)
 	if err != nil {
 		return err
 	}

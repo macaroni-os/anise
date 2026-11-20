@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/system"
+	"github.com/containerd/continuity/sysx"
 	"github.com/google/renameio"
 	copy "github.com/otiai10/copy"
 	"github.com/pkg/errors"
@@ -232,13 +232,16 @@ func CopyFile(src, dst string) (err error) {
 }
 
 func copyXattr(srcPath, dstPath, attr string) error {
-	data, err := system.Lgetxattr(srcPath, attr)
+	data, err := sysx.LGetxattr(srcPath, attr)
+	if errors.Is(err, sysx.ENODATA) {
+		return nil
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("read extended attribute %q on %q: %w", attr, srcPath, err)
 	}
 	if data != nil {
-		if err := system.Lsetxattr(dstPath, attr, data, 0); err != nil {
-			return err
+		if err := sysx.LSetxattr(dstPath, attr, data, 0); err != nil {
+			return fmt.Errorf("set extended attribute %q on %q: %w", attr, dstPath, err)
 		}
 	}
 	return nil
