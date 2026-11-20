@@ -125,11 +125,18 @@ func (s *SpecFile) Prepare() error {
 }
 
 func (s *SpecFile) IsPath2Skip(resource string) bool {
+	// Portal passes paths with a leading slash, while the bridge passes
+	// relative archive names. Accept portal-style rules for those names too.
+	rooted := ""
+	if !strings.HasPrefix(resource, "/") {
+		rooted = "/" + resource
+	}
+
 	ans := false
 
 	if len(s.MatchPrefix) > 0 {
 		for _, p := range s.MatchPrefix {
-			if strings.HasPrefix(resource, p) {
+			if strings.HasPrefix(resource, p) || (rooted != "" && strings.HasPrefix(rooted, p)) {
 				ans = true
 				break
 			}
@@ -140,7 +147,7 @@ func (s *SpecFile) IsPath2Skip(resource string) bool {
 
 	if len(s.IgnoreFiles) > 0 && !ans {
 		for _, f := range s.IgnoreFiles {
-			if f == resource {
+			if f == resource || (rooted != "" && f == rooted) {
 				ans = true
 				break
 			}
@@ -149,7 +156,11 @@ func (s *SpecFile) IsPath2Skip(resource string) bool {
 
 	if len(s.IgnoreRegexes) > 0 && !ans {
 		for _, r := range s.ignoreRegexes {
-			if r.MatchString(resource) {
+			// Use the rooted path only for patterns starting with "/" or "^/".
+			// Other patterns keep matching the original archive path.
+			if r.MatchString(resource) || (rooted != "" &&
+				strings.HasPrefix(strings.TrimPrefix(r.String(), "^"), "/") &&
+				r.MatchString(rooted)) {
 				ans = true
 				break
 			}
