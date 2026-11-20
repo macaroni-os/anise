@@ -232,7 +232,8 @@ func (m *ArtifactsManager) checkPackageFiles(
 	}
 
 	if p.Metadata == nil || p.Metadata.Files == nil {
-		return nil, fmt.Errorf("artifact %s without metadata")
+		return nil, fmt.Errorf("artifact %s without metadata",
+			p.Runtime.HumanReadableString())
 	}
 
 	if len(p.Metadata.Files) == 0 {
@@ -403,7 +404,7 @@ func (m *ArtifactsManager) PackageLoadExtraMetadata(
 
 	file, err := os.Open(repoExtrametaFile)
 	if err != nil {
-		return fmt.Errorf("cannot open " + repoExtrametaFile)
+		return fmt.Errorf("cannot open %s", repoExtrametaFile)
 	}
 	defer file.Close()
 

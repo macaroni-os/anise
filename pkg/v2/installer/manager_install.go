@@ -99,7 +99,7 @@ func (m *ArtifactsManager) ShowReposRevision() error {
 		wr := wagon.NewWagonRepository(&m.Config.SystemRepositories[idx])
 		err := wr.ReadWagonIdentify(repobasedir)
 		if err != nil {
-			return fmt.Errorf("Error on read repository identity file: " + err.Error())
+			return fmt.Errorf("Error on read repository identity file: %s", err.Error())
 		}
 
 		tsec, _ := strconv.ParseInt(wr.Identity.GetLastUpdate(), 10, 64)
