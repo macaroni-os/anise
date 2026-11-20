@@ -682,7 +682,6 @@ func (a *PackageArtifact) GetProtectFiles() []string {
 				annotationDir = dir
 			}
 		}
-		// TODO: check if skip this if we have a.CompileSpec nil
 
 		cp := NewConfigProtect(annotationDir)
 		cp.Map(a.Files)
@@ -726,7 +725,10 @@ func (a *PackageArtifact) Unpack(dst string, enableSubsets bool) error {
 		tarformers.SetReader(topts.FileReader)
 	}
 
-	tarformers.SetFileHandler(tarModifierWrapperFunc)
+	// Tar-formers invokes the handler for every file when no triggers are set.
+	if len(protectedFiles) > 0 {
+		tarformers.SetFileHandler(tarModifierWrapperFunc)
+	}
 
 	err = tarformers.RunTask(spec, dst)
 	if err != nil {
