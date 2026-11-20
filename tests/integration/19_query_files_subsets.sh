@@ -95,4 +95,4 @@ check_files "$(printf '%s\n' "$rootfs/usr/bin/example" "$rootfs/usr/include/exam
   --subsets
 
 printf 'enabled: [devel]\n' > "$enabled/local.yaml"
-check_files "$all_files" --subsets --with-rootfs-prefix=false
+check_files "$all_files [subsets: devel]" --subsets --with-rootfs-prefix=false
