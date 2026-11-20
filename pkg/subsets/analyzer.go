@@ -37,21 +37,19 @@ func NewSubsetsAnalyzerWithMatches(enableSubsets, trackMatches bool,
 
 	if enableSubsets {
 		for k, v := range def.Definitions {
-			if !helpers.ContainsElem(&AniseCfg.Subsets.Enabled, k) {
-				// POST: the selected subset is not enabled.
-				//       I add the rules as IgnoreRegexes.
-
+			disabled := !helpers.ContainsElem(&AniseCfg.Subsets.Enabled, k)
+			if disabled || trackMatches {
 				for _, r := range v.Rules {
 					re, err := regexp.Compile(r)
 					if err != nil {
 						return nil, err
 					}
-					ans.ignoreRegexes = append(ans.ignoreRegexes, re)
-					if trackMatches {
+					if disabled {
+						ans.ignoreRegexes = append(ans.ignoreRegexes, re)
+					} else {
 						ans.enabledRules[k] = append(ans.enabledRules[k], re)
 					}
 				}
-
 			}
 		}
 	}
